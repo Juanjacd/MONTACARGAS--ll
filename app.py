@@ -201,16 +201,15 @@ def to_time(x):
     if pd.isna(x): return None
     try:
         if hasattr(x, "hour"):
-            return dtime(int(x.hour), int(getattr(x, "minute", 0)), int(getattr(x, "second", 0)))
-    except Exception:
-        pass
+            return dtime(int(x.hour), int(getattr(x,"minute",0)), int(getattr(x,"second",0)))
+    except Exception: pass
     s = str(x).strip()
-    for fmt in ("%H:%M:%S", "%H:%M"):
+    for fmt in ("%H:%M:%S","%H:%M"):
         try:
             dtv = pd.to_datetime(s, format=fmt); return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv,"second",0)))
         except Exception: pass
     dtv = pd.to_datetime(s, errors="coerce")
-    return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0))) if pd.notnull(dtv) else None
+    return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv,"second",0))) if pd.notnull(dtv) else None
 
 def turno_by_time(t: dtime):
     if t is None: return None
