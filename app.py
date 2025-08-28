@@ -20,7 +20,7 @@ from collections import Counter
 import datetime
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
-BUILD = "v2025-08-27-5"
+BUILD = "v2025-08-27-6"
 
 # =================== Estilos base ===================
 st.markdown(f"""
@@ -70,14 +70,14 @@ with st.sidebar:
     st.caption(f"Build: {BUILD}")
     st.markdown("---")
 
-# Detectar compacto (móvil vs PC)
+# Detectar compacto (móvil vs PC) por preferencia de UI
 def is_compact() -> bool:
     return st.session_state.get("compact", True)
 
 def set_compact(v: bool):
     st.session_state["compact"] = bool(v)
 
-# Configuración inicial de dark según dispositivo
+# Configuración inicial de dark según “compact” (móvil oscuro por defecto, PC claro)
 if "dark" not in st.session_state:
     st.session_state["dark"] = True if is_compact() else False
 dark = st.sidebar.checkbox("🌙 Modo oscuro", value=st.session_state["dark"])
@@ -111,16 +111,21 @@ def apply_plot_theme(fig):
         paper_bgcolor=("#0f172a" if dark else "#ffffff"),
         plot_bgcolor=("#0b1220" if dark else "#ffffff"),
         font=dict(color=("#e5e7eb" if dark else "#0f172a"), size=base_font),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-                    font=dict(size=leg_font), bgcolor="rgba(0,0,0,0)"),
-        margin=dict(t=60, b=40, l=10, r=10),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom", y=1.02,
+            xanchor="left", x=0,
+            font=dict(size=leg_font),
+            bgcolor="rgba(0,0,0,0)"
+        ),
+        margin=dict(t=60, b=(40 if not is_compact() else 60), l=10, r=10),
         showlegend=True
     )
-    fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(showgrid=False, zeroline=False)
+    fig.update_xaxes(showgrid=False, zeroline=False, tickformat=".4f")
+    fig.update_yaxes(showgrid=False, zeroline=False, tickformat=".4f")
 
 # =========================================================
-# [S2] Reglas de turnos y paletas
+# [S2] Reglas de turnos
 # =========================================================
 THRESH_MIN = 15
 TURNOS = {
@@ -134,7 +139,7 @@ TURNOS = {
 LATE_B_CUTOFF = dtime(3, 0)
 
 # =========================================================
-# [S3] Normalización / clasificación
+# [S3] Normalización / clasificación utilitaria
 # =========================================================
 def _norm_nfd_ascii(s: str) -> str:
     if s is None: return ""
@@ -294,6 +299,7 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
     )
     out = out.dropna(subset=["Fecha","Time","Datetime"])
     return out[["Usuario","Fecha","Hora","Time","Turno","Datetime","Orden"]]
+
 # =========================================================
 # [S7] Sidebar: carga + preferencias + filtros
 # =========================================================
@@ -319,7 +325,7 @@ with st.sidebar:
         with col2: btn_reload = st.button("🔁 Recargar histórico")
 
     with st.expander("⚙️ Preferencias", expanded=False):
-        chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"])
+        chart_type = st.selectbox("Orientación (TM y Órdenes)", ["Barra horizontal", "Barra vertical"], index=0)
         compact_ui = st.checkbox("📱 Modo compacto (móvil)", value=True)
         set_compact(compact_ui)
         st.session_state["chart_type"] = chart_type
@@ -404,6 +410,8 @@ def render_kpis(df_filtered: pd.DataFrame):
 # =========================================================
 def view_tm(df_in: pd.DataFrame):
     st.subheader("⏱ Tiempo muerto por usuario y turno")
+
+    # gaps dentro de mismo día operativo y mismo turno
     df_g = df_in.sort_values(["Usuario","DatetimeOper"]).copy()
     df_g["prev_dt"] = df_g.groupby("Usuario")["DatetimeOper"].shift(1)
     df_g["prev_fecha"] = df_g.groupby("Usuario")["FechaOper"].shift(1)
@@ -413,7 +421,7 @@ def view_tm(df_in: pd.DataFrame):
 
     rows = []
     for _, r in df_g.iterrows():
-        start = r["prev_dt"]; end = r["DatetimeOper"]; date = r["FechaOper"]
+        start = r["prev_dt"]; end = r["DatetimeOper"]
         gap = (end - start).total_seconds()/60.0
         if gap > THRESH_MIN:
             rows.append({"Usuario":r["Usuario"],"Turno":r["Turno"],"GapMin":gap})
@@ -423,14 +431,26 @@ def view_tm(df_in: pd.DataFrame):
         st.info("No se detectaron gaps > 15 min."); return
 
     agg = dead.groupby(["Usuario","Turno"])["GapMin"].sum().reset_index()
+
     chart_is_h = (st.session_state.get("chart_type") == "Barra horizontal")
+    cat_orders = {"Turno": ["Turno A","Turno B"]}
+
     if chart_is_h:
-        fig = px.bar(agg, x="GapMin", y="Usuario", color="Turno", orientation="h", text=agg["GapMin"].round(4))
+        fig = px.bar(
+            agg, x="GapMin", y="Usuario", color="Turno", orientation="h",
+            text=agg["GapMin"].round(4),
+            category_orders=cat_orders
+        )
     else:
-        fig = px.bar(agg, x="Usuario", y="GapMin", color="Turno", text=agg["GapMin"].round(4))
+        fig = px.bar(
+            agg, x="Usuario", y="GapMin", color="Turno",
+            text=agg["GapMin"].round(4),
+            category_orders=cat_orders
+        )
     fig.update_traces(texttemplate="%{text:.4f}")
     apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True,
+                    config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
 # =========================================================
 # [S10] Vista — Órdenes OT
@@ -441,10 +461,25 @@ def view_ordenes(df_in: pd.DataFrame):
     if cnt.empty:
         st.info("No hay datos para 'Órdenes OT'."); return
 
-    fig = px.bar(cnt, x="Usuario", y="CNT", color="Turno", text=cnt["CNT"].round(4))
+    chart_is_h = (st.session_state.get("chart_type") == "Barra horizontal")
+    cat_orders = {"Turno": ["Turno A","Turno B"]}
+
+    if chart_is_h:
+        fig = px.bar(
+            cnt, x="CNT", y="Usuario", color="Turno", orientation="h",
+            text=cnt["CNT"].round(4),
+            category_orders=cat_orders
+        )
+    else:
+        fig = px.bar(
+            cnt, x="Usuario", y="CNT", color="Turno",
+            text=cnt["CNT"].round(4),
+            category_orders=cat_orders
+        )
     fig.update_traces(texttemplate="%{text:.4f}")
     apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True,
+                    config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
 # =========================================================
 # [S11] Vista — Inicio / Fin
@@ -454,15 +489,21 @@ def view_inicio_fin(df_in: pd.DataFrame):
     agg = df_in.groupby(["Usuario","Turno"])["DatetimeOper"].agg(["min","max"]).reset_index()
     agg["min_h"] = agg["min"].dt.strftime("%H:%M")
     agg["max_h"] = agg["max"].dt.strftime("%H:%M")
-    fig = go.Figure()
-    for _, r in agg.iterrows():
-        fig.add_trace(go.Bar(
-            x=[r["Usuario"]], y=[(r["max"]-r["min"]).total_seconds()/3600],
-            text=f"{r['min_h']} → {r['max_h']}",
-            name=r["Turno"]
-        ))
+
+    # Duración en horas con 4 decimales
+    agg["DurH"] = (agg["max"] - agg["min"]).dt.total_seconds() / 3600.0
+
+    # Barras agrupadas por usuario, color por turno, texto con rango
+    fig = px.bar(
+        agg, x="Usuario", y="DurH", color="Turno",
+        text=agg.apply(lambda r: f"{r['min_h']} → {r['max_h']}", axis=1),
+        category_orders={"Turno":["Turno A","Turno B"]}
+    )
+    fig.update_traces(texttemplate="%{text}", hovertemplate="Usuario: %{x}<br>Turno: %{legendgroup}<br>Duración: %{y:.4f} h<extra></extra>")
+    fig.update_yaxes(title="Horas")
     apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True,
+                    config={"displayModeBar": False, "responsive": True, "scrollZoom": False})
 
 # =========================================================
 # [S12] Render final
