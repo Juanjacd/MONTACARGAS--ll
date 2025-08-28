@@ -60,6 +60,7 @@ BASE_STYLE = f"""
 :root{{
   --bg:#ffffff; --panel:#f8fafc; --ink:#0f172a; --muted:#64748b; --border:#e5e7eb;
   --accent:#0ea5e9;
+  /* altura real del header (ajústala si tu build es distinta) */
   --header-h: 64px;
 }}
 
@@ -69,9 +70,11 @@ header[data-testid="stHeader"]{{
   background-color: var(--bg) !important;
   border-bottom:1px solid var(--border) !important;
 }}
+/* Empuja el contenido para que el header no tape el hero */
 [data-testid="stAppViewContainer"] > .main{{
   padding-top: calc(var(--header-h) + 12px) !important;
 }}
+/* Evita doble padding interno de Streamlit */
 main .block-container{{ padding-top: 0 !important; }}
 
 /* ===== Colores base ===== */
@@ -97,6 +100,7 @@ div.hero{{
 .hero-wrap{{ display:flex; flex-direction:column; gap:.25rem; width:100%; }}
 h1.hero-title{{ 
   margin:0; line-height:1.15; font-weight:800; color:var(--ink);
+  /* tamaño fluido para cualquier ancho */
   font-size: clamp(20px, 2.6vw + 8px, 34px);
   text-wrap: balance; overflow-wrap:anywhere;
 }}
@@ -120,11 +124,6 @@ input, textarea{{ background:var(--bg)!important; color:var(--ink)!important;
 
 /* Usuarios en ejes en negrita */
 g.xtick text, g.ytick text{{ font-weight:700; }}
-
-/* ======== Oscuro por defecto en móviles (≤680px) ======== */
-@media (max-width: 680px){{
-  :root{{ --bg:#0b1220; --panel:#0f172a; --ink:#e5e7eb; --muted:#cbd5e1; --border:#1f2937; --accent:#22d3ee; }}
-}}
 </style>
 
 <div class="hero"><div class="hero-wrap">
@@ -132,39 +131,74 @@ g.xtick text, g.ytick text{{ font-weight:700; }}
   <div class="hero-sub">{APP_TAGLINE}</div>
 </div></div>
 """
-
 st.markdown(BASE_STYLE, unsafe_allow_html=True)
+
+# --- Compacto (móvil) y modo oscuro por defecto en móvil ---
+if "compact" not in st.session_state:
+    # primera vez asumimos móvil => oscuro por defecto
+    st.session_state["compact"] = True
+if "dark" not in st.session_state:
+    st.session_state["dark"] = st.session_state["compact"]
 
 with st.sidebar:
     st.markdown("---")
-    dark = st.checkbox("🌙 Modo oscuro", value=False, help="PC claro por defecto. En móvil, oscuro por defecto.")
+    st.session_state["compact"] = st.checkbox("📱 Modo compacto (móvil)", value=st.session_state["compact"])
+    dark = st.checkbox("🌙 Modo oscuro", value=st.session_state["dark"], help="Cambia colores (app + gráficas)")
+st.session_state["dark"] = bool(dark)
+dark = st.session_state["dark"]
 
+# Tema oscuro coherente (app + sidebar + tarjetas + inputs)
 if dark:
     st.markdown("""
     <style>
     :root{ --bg:#0b1220; --panel:#0f172a; --ink:#e5e7eb; --muted:#cbd5e1; --border:#1f2937; --accent:#22d3ee;}
     html, body, #root, .stApp, main, .main, .block-container,
-    [data-testid="stAppViewContainer"], [data-testid="stSidebar"], header[data-testid="stHeader"]{
+    [data-testid="stAppViewContainer"], header[data-testid="stHeader"]{
       background-color: var(--bg) !important; color: var(--ink) !important;
     }
-    section[data-testid="stSidebar"], section[data-testid="stSidebar"] *{
-      background-color: transparent !important; color: var(--ink) !important;
+    section[data-testid="stSidebar"]{
+      background-color: var(--panel) !important; color: var(--ink) !important;
+      border-right:1px solid var(--border) !important;
     }
     .hero, .section, .note-box, .kpi-card,
-    div[data-testid="stExpander"] details{ background: var(--panel) !important; color: var(--ink) !important; border-color: var(--border) !important; }
-    [data-baseweb="select"] > div{ background: var(--panel) !important; border:1px solid var(--border)!important; border-radius:10px!important; }
-    .stDateInput input, input, textarea{ background: var(--panel)!important; color: var(--ink)!important; border:1px solid var(--border)!important; }
+    div[data-testid="stExpander"] details{
+      background: var(--panel) !important; color: var(--ink) !important; border-color: var(--border) !important;
+    }
+    [data-baseweb="select"] > div,
+    .stDateInput input, input, textarea{
+      background: var(--panel)!important; color: var(--ink)!important; border:1px solid var(--border)!important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
+# Sidebar como panel separado en móvil + flecha visible en expander
+st.markdown("""
+<style>
+div[data-testid="stExpander"] summary{ visibility:visible !important; opacity:1 !important; }
+@media (max-width: 768px){
+  section[data-testid="stSidebar"]{
+    position: fixed !important;
+    top: var(--header-h);
+    left: 0;
+    height: calc(100vh - var(--header-h)) !important;
+    width: 86vw !important;
+    z-index: 1000 !important;
+    box-shadow: 10px 0 24px rgba(0,0,0,.35);
+    border-right:1px solid var(--border) !important;
+  }
+  .block-container{ padding-left: .6rem; padding-right: .6rem; }
+}
+</style>
+""", unsafe_allow_html=True)
+
 def apply_plot_theme(fig):
-    is_dark = bool(dark)
+    is_dark = bool(st.session_state.get("dark", False))
     fig.update_layout(
         template=("plotly_dark" if is_dark else "plotly_white"),
         paper_bgcolor=("#0f172a" if is_dark else "#ffffff"),
         plot_bgcolor=("#0b1220" if is_dark else "#ffffff"),
         font=dict(color=("#e5e7eb" if is_dark else "#0f172a")),
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0)"),
+        legend=dict(orientation="v", y=1, x=1.02, yanchor="top", xanchor="left", bgcolor="rgba(0,0,0,0)"),
         showlegend=True
     )
     fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="")
@@ -193,7 +227,7 @@ EXT_ITEMS = [
     ITEM_WAZ, ITEM_BODEGA, "UBIC.SOBRESTOCK","REACOM.SOBRESTOCK"
 ]
 
-ITEMS_HIDDEN = []
+ITEMS_HIDDEN = []  # puedes dejarlo vacío
 
 PALETTES = {
   "Petróleo & Tierra": {
@@ -521,21 +555,13 @@ with st.sidebar:
 
     sel_users = st.multiselect("Usuarios", users, [])
     sel_turns = st.multiselect("Turnos", turns, [])
+    sel_range = st.date_input("Rango de fechas", (fmin, fmax))
 
-    # --- Formulario de fechas como en PC (Aplicar) ---
-    with st.form("f_fechas"):
-        d0 = st.date_input("Desde", value=fmin, min_value=fmin, max_value=fmax, format="YYYY-MM-DD")
-        d1 = st.date_input("Hasta",  value=fmax, min_value=fmin, max_value=fmax, format="YYYY-MM-DD")
-        ok = st.form_submit_button("Aplicar")
-
-if ok or "range" not in st.session_state:
-    if d1 < d0: d0, d1 = d1, d0
-    st.session_state["range"] = (d0, d1)
-
-d0, d1 = st.session_state["range"]
-start_ts = pd.Timestamp(d0)
-end_ts   = pd.Timestamp(d1) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-
+start_ts, end_ts = (
+    (pd.Timestamp(sel_range[0]), pd.Timestamp(sel_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
+    if isinstance(sel_range, (list, tuple)) and len(sel_range) == 2
+    else (pd.Timestamp(fmin), pd.Timestamp(fmax) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
+)
 df_pre = df.copy()
 if sel_users: df_pre = df_pre[df_pre["Usuario"].isin(sel_users)]
 if sel_turns: df_pre = df_pre[df_pre["Turno"].isin(sel_turns)]
@@ -550,14 +576,14 @@ def classify_any(row) -> Optional[str]:
 if "ItemExt" not in df_pre.columns:
     df_pre["ItemExt"] = df_pre.apply(lambda r: classify_any(r), axis=1)
 
-# --------- Ítems (sidebar) ---------
+# --------- Ítems sin chips preseleccionados (sidebar derecha) ---------
 avail_items = [it for it in EXT_ITEMS if it in set(df_pre["ItemExt"].dropna().unique().tolist())]
-default_items = []
+default_items = []  # nada preseleccionado
 with st.sidebar:
     sel_items = st.multiselect("Ítems", avail_items, default_items, key="items_selector")
-
-# Dataset FINAL
+# Dataset FINAL: si no hay selección, usar todo
 df_f = df_pre[df_pre["ItemExt"].isin(sel_items)].copy() if sel_items else df_pre.copy()
+# ----------------------------------------------------------------------
 
 with st.sidebar:
     st.markdown("---")
@@ -582,6 +608,17 @@ def _responsive_bar_style(fig, n_categories:int):
     elif n_categories <= 24:     bargap, bgrp = 0.08, 0.03
     else:                        bargap, bgrp = 0.06, 0.02
     fig.update_layout(bargap=bargap, bargroupgap=bgrp)
+
+def autosize_bar_text(fig, n_items: int, decimals: int = 0):
+    """
+    Ajusta tamaño/visibilidad de etiquetas para móviles.
+    """
+    if n_items <= 10:
+        fig.update_traces(texttemplate=f"%{{text:.{decimals}f}}", textfont=dict(size=13), cliponaxis=False)
+    elif n_items <= 18:
+        fig.update_traces(texttemplate=f"%{{text:.{decimals}f}}", textfont=dict(size=11), cliponaxis=False)
+    else:
+        fig.update_traces(text=None)
 
 def render_kpis(df_filtered: pd.DataFrame):
     total = len(df_filtered); uniq_users = df_filtered["Usuario"].nunique()
@@ -680,7 +717,7 @@ def view_tm_por_usuario_turno():
 
         totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
         fig.add_trace(go.Scatter(x=totals.values, y=totals.index.tolist(), mode="text",
-                                 text=[f"{int(v)} min" for v in totals.values],
+                                 text=[f"{v:.0f} min" for v in totals.values],
                                  textposition="middle right", textfont=dict(size=12, color=ANN_COL),
                                  showlegend=False, hoverinfo="skip"))
         xmax = max(1, float(totals.max()))
@@ -699,10 +736,20 @@ def view_tm_por_usuario_turno():
         fig.update_yaxes(range=[0, ymax])
         fig.add_trace(go.Bar(x=totals.index.tolist(), y=totals.values,
                              marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
-                             text=[f"{int(v)} min" for v in totals.values],
+                             text=[f"{v:.0f} min" for v in totals.values],
                              textposition="outside", textfont=dict(size=11, color=ANN_COL)))
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=10), legend_title_text="Ítem")
+
+        # Si algún trazo trae texto numérico, forzar enteros
+        for tr in fig.data:
+            if hasattr(tr, "text") and tr.text is not None:
+                try:
+                    tr.text = [f"{float(v):.0f}" if v not in (None,"") else "" for v in tr.text]
+                except Exception:
+                    pass
+
+        autosize_bar_text(fig, len(order_axis), decimals=0)
 
     apply_plot_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
@@ -738,7 +785,7 @@ def view_ordenes_ot():
     fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95)
     fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-30, tickfont=dict(size=11))
 
-    # --- etiquetas de totales sin decimales ---
+    # --- etiquetas de totales mejor posicionadas y responsivas ---
     totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
     n_bars = len(order_axis)
     max_digits = len(str(int(totals.max()))) if len(totals) else 1
@@ -758,8 +805,18 @@ def view_ordenes_ot():
         ))
     prev = list(fig.layout.annotations) if fig.layout.annotations else []
     fig.update_layout(annotations=prev + annotations)
+    # -------------------------------------------------------------
+
+    # Forzar enteros en textos si algún trazo lleva text
+    for tr in fig.data:
+        if hasattr(tr, "text") and tr.text is not None:
+            try:
+                tr.text = [f"{float(v):.0f}" if v not in (None,"") else "" for v in tr.text]
+            except Exception:
+                pass
 
     _responsive_bar_style(fig, n_bars)
+    autosize_bar_text(fig, n_bars, decimals=0)
     fig.update_layout(margin=dict(t=50, b=10, l=10, r=100), legend_title_text="Ítem")
     apply_plot_theme(fig)
 
@@ -911,6 +968,9 @@ def view_inicio_fin_turno():
                              textposition="top center", textfont=dict(size=12, color=ANN_COL),
                              showlegend=False, hoverinfo="skip"))
     _responsive_bar_style(fig, len(order_axis))
+    # Mejor contraste de las etiquetas en móvil
+    if st.session_state.get("compact", False):
+        fig.update_traces(selector=dict(mode="text"), textfont=dict(size=13, color=ANN_COL))
     fig.update_layout(margin=dict(t=10,b=10,l=10,r=160), legend_title_text="Hito")
     apply_plot_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
