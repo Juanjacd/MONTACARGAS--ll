@@ -778,7 +778,7 @@ def view_inicio_fin_turno():
             t_ini, t_alim, t_cie = r["t_ini"], r["t_alim"], r["t_cie"]
             it_ini, it_alim, it_cie = r["it_ini"], r["it_alim"], r["it_cie"]
             modo = "Día único"
-            extra_info = "Sí" si bool(r["extra"]) else "No"
+            extra_info = "Sí" if bool(r["extra"]) else "No"
             extra_days = int(bool(r["extra"]))
         else:
             n_dias = g["FechaOper"].nunique()
