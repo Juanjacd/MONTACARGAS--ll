@@ -127,23 +127,26 @@ g.xtick text, g.ytick text{{ font-weight:700; }}
 
 /* [MOBILE] Mejoras responsivas y separación Sidebar/App */
 @media (max-width: 768px){{
+  /* [MOBILE] padding contenido más compacto */
   .block-container{{ padding: 8px 10px !important; }}
   .hero, .section, .kpi-card{{ border-radius:12px; }}
+
+  /* [MOBILE] textos de ejes/labels legibles */
   .js-plotly-plot .xtick text, .js-plotly-plot .ytick text{{ font-size:11px !important; }}
-  .js-plotly-plot .annotation-text{{ font-size:11px !important; }}
-  .modebar-container{{ display:none !important; }} /* oculta toolbar plotly en móvil */
-  /* sidebar flotante con sombra y sin mezclarse con el tablero */
-  [data-testid="stSidebar"]{{
-    position: fixed; top: var(--header-h); left: 0;
-    height: calc(100vh - var(--header-h)); width: 85vw; z-index: 100;
-    box-shadow: 2px 0 18px rgba(0,0,0,.25);
-    border-right:1px solid var(--border);
-  }}
-  [data-testid="stAppViewContainer"] > .main{{ padding-left: 0 !important; }}
-  /* pickers arriba de todo (fecha/select) */
+  .js-plotly-plot .legend text{{ font-size:11px !important; }}
+
+  /* [MOBILE] evita que el sidebar se superponga al tablero:
+     NO forzamos posición fija; dejamos el comportamiento nativo de Streamlit */
+  [data-testid="stSidebar"]{{ position: initial !important; width:auto !important; height:auto !important; box-shadow:none !important; z-index: 1 !important; }}
+
+  /* [MOBILE] date/select encima del resto mientras están abiertos */
   .stDateInput, [data-baseweb="select"]{{ position: relative; z-index: 5; }}
-  /* evita que se corten números fuera de la gráfica */
+
+  /* [MOBILE] evita recorte de números/etiquetas dentro del SVG */
   .main-svg{{ overflow: visible !important; }}
+
+  /* [MOBILE] los textos 'outside' pueden saturar en pantallas pequeñas -> suavizamos */
+  .js-plotly-plot .bartext{{ font-size:11px !important; }}
 }}
 </style>
 
@@ -157,7 +160,7 @@ st.markdown(BASE_STYLE, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("---")
-    # [MOBILE] Oscuro por defecto (también en escritorio) para que las gráficas arranquen con tema oscuro
+    # [MOBILE] Oscuro por defecto para que toda la app y gráficas inicien en dark
     dark = st.checkbox("🌙 Modo oscuro", value=True, help="Cambia colores (app + gráficas)")
 
 if dark:
@@ -192,8 +195,9 @@ def apply_plot_theme(fig):
         uniformtext_minsize=10,               # [MOBILE] texto más legible
         uniformtext_mode="show"               # [MOBILE] intenta mostrar sin solapar
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="")
-    fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")  # [MOBILE] ejes sin decimales
+    # [MOBILE] ejes sin decimales
+    fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
+    fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
 
 ANN_COL  = "#e5e7eb" if dark else "#6B7280"
 
@@ -692,39 +696,48 @@ def view_tm_por_usuario_turno():
                      category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
                      color_discrete_map=EXT_COLOR_MAP,
                      custom_data=["ItemExt","Min"], height=height)
-        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, texttemplate="%{x:.0f}")
+        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95)
         fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=12))
 
         totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-        fig.add_trace(go.Scatter(x=totals.values, y=totals.index.tolist(), mode="text",
-                                 text=[f"{v:.0f} min" for v in totals.values],
-                                 textposition="middle right", textfont=dict(size=12, color=ANN_COL),
-                                 showlegend=False, hoverinfo="skip"))
+        # [MOBILE] totales con fondo para legibilidad
+        ann = []
+        for y_label, x_val in zip(totals.index.tolist(), totals.values):
+            ann.append(dict(x=x_val, y=y_label, xref="x", yref="y",
+                            text=f"{int(round(x_val))} min",
+                            showarrow=False, xanchor="left", yanchor="middle",
+                            bgcolor="rgba(0,0,0,0.25)", borderpad=2,
+                            font=dict(size=12, color=ANN_COL)))
+        fig.update_layout(annotations=ann)
         xmax = max(1, float(totals.max()))
-        fig.update_xaxes(range=[0, xmax*1.06], tickfont=dict(size=12), tickformat=",d")  # [MOBILE] ejes enteros
+        fig.update_xaxes(range=[0, xmax*1.06], tickfont=dict(size=12), tickformat=",d")
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=110), legend_title_text="Ítem")
     else:
-        # [MOBILE] altura dinámica y ejes enteros
-        height_v = max(420, 26*len(order_axis)+160)
+        height_v = max(420, 26*len(order_axis)+160)  # [MOBILE] altura dinámica
         fig = px.bar(g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
                      category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
                      color_discrete_map=EXT_COLOR_MAP,
                      custom_data=["ItemExt","Min"], height=height_v)
-        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, texttemplate="%{y:.0f}")
-        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-50, tickfont=dict(size=11))
+        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95)
+        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-55, tickfont=dict(size=11))
         totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-        ymax = float(totals.max())*1.12
-        fig.update_yaxes(range=[0, ymax], tickformat=",d")
-        fig.add_trace(go.Bar(x=totals.index.tolist(), y=totals.values,
-                             marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
-                             text=[f"{v:.0f} min" for v in totals.values],
-                             textposition="outside", textfont=dict(size=11, color=ANN_COL)))
+        y_max = float(totals.max())*1.14
+        fig.update_yaxes(range=[0, y_max], tickformat=",d")
+        # [MOBILE] totales como anotaciones con fondo
+        ann = []
+        for x_label, y_val in zip(totals.index.tolist(), totals.values):
+            ann.append(dict(x=x_label, y=y_val, xref="x", yref="y",
+                            text=f"{int(round(y_val))} min",
+                            showarrow=False, yanchor="bottom", yshift=6,
+                            bgcolor="rgba(0,0,0,0.25)", borderpad=2,
+                            font=dict(size=11, color=ANN_COL)))
+        fig.update_layout(annotations=ann)
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=10), legend_title_text="Ítem")
 
     apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})  # [MOBILE] sin modebar
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 # =========================================================
 # [S10] Vista 2 — Órdenes OT por usuario/turno (usa df_f)
@@ -749,8 +762,7 @@ def view_ordenes_ot():
     hover_tmpl = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
 
     n_bars = len(order_axis)
-    # [MOBILE] Orientación automática si hay muchas barras (mejor legibilidad en pantallas estrechas)
-    if n_bars > 14:
+    if n_bars > 14:  # [MOBILE] muchas categorías -> horizontal
         height_h = max(380, 24*n_bars + 140)
         fig = px.bar(
             cnt, x="CNT", y="UsuarioTurnoShort", color="ItemExt", barmode="stack",
@@ -759,14 +771,17 @@ def view_ordenes_ot():
             color_discrete_map=EXT_COLOR_MAP,
             custom_data=["ItemExt","CNT","UsuarioTurnoShort"], height=height_h
         )
-        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, texttemplate="%{x:.0f}")
+        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95)
         fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=11))
-        # totales al final de cada barra
         totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
-        fig.add_trace(go.Scatter(x=totals.values, y=totals.index.tolist(), mode="text",
-                                 text=[f"{int(v):,}".replace(",", ".") for v in totals.values],
-                                 textposition="middle right", textfont=dict(size=12, color=ANN_COL),
-                                 showlegend=False, hoverinfo="skip"))
+        ann = []
+        for y_label, x_val in zip(totals.index.tolist(), totals.values):
+            ann.append(dict(x=x_val, y=y_label, xref="x", yref="y",
+                            text=f"{int(x_val):,}".replace(",", "."),
+                            showarrow=False, xanchor="left", yanchor="middle",
+                            bgcolor="rgba(0,0,0,0.25)", borderpad=2,
+                            font=dict(size=12, color=ANN_COL)))
+        fig.update_layout(annotations=ann)
         fig.update_xaxes(tickformat=",d")
         _responsive_bar_style(fig, n_bars)
         fig.update_layout(margin=dict(t=30, b=10, l=10, r=110), legend_title_text="Ítem")
@@ -778,32 +793,28 @@ def view_ordenes_ot():
             color_discrete_map=EXT_COLOR_MAP,
             custom_data=["ItemExt","CNT","UsuarioTurnoShort"], height=height_v
         )
-        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, texttemplate="%{y:.0f}")
+        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95)
         fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-55, tickfont=dict(size=11))
-        # --- etiquetas de totales mejor posicionadas y responsivas ---
         totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
         max_digits = len(str(int(totals.max()))) if len(totals) else 1
         lab_size = max(11, min(16, 15 - max(0, max_digits - 3)))
         pad_frac = 0.14 + 0.01 * (lab_size - 11)
         y_max = float(totals.max()) * (1 + pad_frac) if len(totals) else 1
         fig.update_yaxes(range=[0, y_max], automargin=True, tickformat=",d")
-        pixel_up = 6 + lab_size * 1.0
-        annotations = []
-        for x_val, y_val in totals.items():
-            annotations.append(dict(
-                x=x_val, y=y_val, xref="x", yref="y",
-                text=f"{int(y_val):,}".replace(",", "."),
-                showarrow=False, yanchor="bottom", yshift=pixel_up,
-                align="center", font=dict(size=lab_size, color=ANN_COL), name=""
-            ))
-        prev = list(fig.layout.annotations) if fig.layout.annotations else []
-        fig.update_layout(annotations=prev + annotations)
-        # -------------------------------------------------------------
+        # [MOBILE] totales como anotaciones con fondo
+        ann = []
+        for x_label, y_val in zip(totals.index.tolist(), totals.values):
+            ann.append(dict(x=x_label, y=y_val, xref="x", yref="y",
+                            text=f"{int(y_val):,}".replace(",", "."),
+                            showarrow=False, yanchor="bottom", yshift=6,
+                            bgcolor="rgba(0,0,0,0.25)", borderpad=2,
+                            font=dict(size=lab_size, color=ANN_COL)))
+        fig.update_layout(annotations=ann)
         _responsive_bar_style(fig, n_bars)
         fig.update_layout(margin=dict(t=50, b=10, l=10, r=100), legend_title_text="Ítem")
 
     apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})  # [MOBILE]
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 # =========================================================
 # [S11] Vista 3 — Inicio/Fin con +24h solo cuando hubo extra (usa df_pre)
@@ -942,17 +953,22 @@ def view_inicio_fin_turno():
                  category_orders={"UsuarioTurnoShort": order_axis, "Hito": ["Inicio","Antes de alimentación","Antes de cierre"]},
                  color_discrete_map={"Inicio":"#1F77B4","Antes de alimentación":"#E4572E","Antes de cierre":"#2CA02C"},
                  custom_data=["Hito","Hora","Info","Item","Extra"], height=height_v)
-    fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.96, texttemplate="%{y:.0f}")
-    fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-50, tickfont=dict(size=11))
+    fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.96)
+    fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-55, tickfont=dict(size=11))
     fig.update_yaxes(tickvals=ticks, ticktext=ticktext, title="Hora del día (HH:MM)")
-    fig.add_trace(go.Scatter(x=top_per_bar.index.tolist(), y=top_per_bar.values,
-                             mode="text", text=[fmt_hhmm(v) for v in top_per_bar.values],
-                             textposition="top center", textfont=dict(size=12, color=ANN_COL),
-                             showlegend=False, hoverinfo="skip"))
+    # [MOBILE] totales HH:MM como anotaciones con fondo
+    ann = []
+    for x_label, y_val in zip(top_per_bar.index.tolist(), top_per_bar.values):
+        ann.append(dict(x=x_label, y=y_val, xref="x", yref="y",
+                        text=fmt_hhmm(y_val),
+                        showarrow=False, yanchor="bottom", yshift=6,
+                        bgcolor="rgba(0,0,0,0.25)", borderpad=2,
+                        font=dict(size=12, color=ANN_COL)))
+    fig.update_layout(annotations=ann)
     _responsive_bar_style(fig, len(order_axis))
     fig.update_layout(margin=dict(t=10,b=10,l=10,r=160), legend_title_text="Hito")
     apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})  # [MOBILE]
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # (Tabla de horas extra eliminada por solicitud)
 
