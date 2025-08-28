@@ -129,21 +129,33 @@ g.xtick text, g.ytick text{{ font-weight:700; }}
    [MOBILE] Ajustes responsivos
    ========================= */
 @media (max-width: 768px){{
+  /* [MOBILE] separa visualmente sidebar del tablero y evita que se "junten" */
+  section[data-testid="stSidebar"]{{
+    position: relative !important;
+    z-index: 1000 !important;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    border-right:1px solid var(--border);
+  }}
+  [data-testid="stAppViewContainer"]{{ position: relative; z-index: 1; }}
+
+  /* [MOBILE] que la barra lateral sea scrolleable y no invada el tablero */
+  section[data-testid="stSidebar"] > div:has(div){{
+    max-height: calc(100vh - var(--header-h) - 8px);
+    overflow-y: auto;
+  }}
+
   /* [MOBILE] padding contenido más compacto */
   .block-container{{ padding: 8px 10px !important; }}
 
-  /* [MOBILE] tipografías de ejes/leyenda ligeramente más grandes */
+  /* [MOBILE] tipografías de ejes/leyenda ligeramente más grandes para legibilidad */
   .js-plotly-plot .xtick text, .js-plotly-plot .ytick text{{ font-size:11px !important; }}
   .js-plotly-plot .legend text{{ font-size:11px !important; }}
 
   /* [MOBILE] asegúrate que nada se recorte */
   .main-svg{{ overflow: visible !important; }}
-
-  /* [MOBILE] popovers (datepicker, selects) por encima del tablero */
-  .stDateInput, [data-baseweb="select"]{{ position: relative; z-index: 5; }}
 }}
 
-/* [MOBILE] z-index alto para el popover del datepicker y selects (no se cierra al cambiar de mes) */
+/* [MOBILE] z-index alto para el popover del datepicker / selects (no se cierra al cambiar mes) */
 [data-baseweb="popover"], .stDateInput [role="dialog"], .stDateInput div[data-baseweb="popover"]{{
   z-index: 9999 !important;
 }}
@@ -159,7 +171,7 @@ st.markdown(BASE_STYLE, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("---")
-    # [MOBILE] Modo oscuro por defecto para que app + gráficas arranquen consistentes
+    # [MOBILE] Modo oscuro por defecto (app + gráficas coherentes al cargar)
     dark = st.checkbox("🌙 Modo oscuro", value=True, help="Cambia colores (app + gráficas)")
 
 if dark:
@@ -189,10 +201,12 @@ def apply_plot_theme(fig):
         font=dict(color=("#e5e7eb" if is_dark else "#0f172a")),
         legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
                     bgcolor="rgba(0,0,0,0)"),
-        showlegend=True
+        showlegend=True,
+        hoverlabel=dict(font_size=12)  # [MOBILE] legible
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")  # [MOBILE] enteros
-    fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")  # [MOBILE] enteros
+    # [MOBILE] enteros en ejes siempre
+    fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
+    fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
 
 ANN_COL  = "#e5e7eb" if dark else "#6B7280"
 
@@ -302,14 +316,12 @@ def _contains_any(txt: str, patterns: List[str]) -> bool:
 def _item_base(ubic_proced: str, ubic_dest: str) -> Optional[str]:
     up = str(ubic_proced or ""); ud = str(ubic_dest or "")
     both_txt = f"{up} | {ud}"; compact = _norm_compact(both_txt); toks = set(_norm_tokens(both_txt))
-    # [FIX] usar la constante correcta
     if "wazone" in compact or ("wa" in toks and "zone" in toks) or "zonav" in compact: return ITEM_WAZ
     if _contains_any(compact, ["transfer","traslado","trasl","transferen","trasfer","transfe","transf"]): return "TRANSFER"
     if _contains_any(compact, ["inspeccion","inspection","inspec","insp","insp."]): return "INSPECCIÓN"
     if _contains_any(compact, ["carpa","carpas"]): return "CARPA"
     if ("calidad" in toks and "ok" in toks) or "calidadok" in compact or "okcalidad" in compact: return "CALIDAD-OK"
     return None
-
 
 def _norm_label(s: str) -> str:
     s = _norm_nfd_ascii(str(s or "")).lower()
@@ -547,7 +559,7 @@ with st.sidebar:
 
     sel_users = st.multiselect("Usuarios", users, [])
     sel_turns = st.multiselect("Turnos", turns, [])
-    sel_range = st.date_input("Rango de fechas", (fmin, fmax))
+    sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range")  # [MOBILE] clave estable: evita que el datepicker se cierre al navegar
 
 start_ts, end_ts = (
     (pd.Timestamp(sel_range[0]), pd.Timestamp(sel_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
@@ -687,13 +699,13 @@ def view_tm_por_usuario_turno():
 
     chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
     if chart_is_h:
-        height = max(320, 22*len(order_axis) + 110)
+        height = max(320, 24*len(order_axis) + 110)  # [MOBILE] alto dinámico
         fig = px.bar(g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
                      barmode="stack",
                      category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
                      color_discrete_map=EXT_COLOR_MAP,
                      custom_data=["ItemExt","Min"], height=height)
-        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95)
+        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)  # [MOBILE]
         fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=12))
 
         totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
@@ -706,19 +718,21 @@ def view_tm_por_usuario_turno():
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=110), legend_title_text="Ítem")
     else:
+        height = max(420, 24*len(order_axis) + 60)  # [MOBILE] alto dinámico
         fig = px.bar(g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
                      category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
                      color_discrete_map=EXT_COLOR_MAP,
-                     custom_data=["ItemExt","Min"], height=420)
-        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95)
-        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-30, tickfont=dict(size=11))
+                     custom_data=["ItemExt","Min"], height=height)
+        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)  # [MOBILE]
+        tick_angle = -65 if len(order_axis) > 8 else -30  # [MOBILE] rotación para legibilidad
+        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
         totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-        ymax = float(totals.max())*1.12
+        ymax = float(totals.max())*1.18
         fig.update_yaxes(range=[0, ymax])
         fig.add_trace(go.Bar(x=totals.index.tolist(), y=totals.values,
                              marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
-                             text=[f"{v:.0f} min" for v in totals.values],
-                             textposition="outside", textfont=dict(size=11, color=ANN_COL)))
+                             text=[f"{v:.0f}" for v in totals.values],  # [MOBILE] sin "min" para que no se monte
+                             textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False))
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=10), legend_title_text="Ítem")
 
@@ -745,41 +759,64 @@ def view_ordenes_ot():
             k = _short_label(u, ab)
             if k in present_keys: order_axis.append(k)
 
-    hover_tmpl = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
-
-    fig = px.bar(
-        cnt, x="UsuarioTurnoShort", y="CNT", color="ItemExt", barmode="stack",
-        category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-        color_discrete_map=EXT_COLOR_MAP,
-        custom_data=["ItemExt","CNT","UsuarioTurnoShort"], height=520
-    )
-    fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95)
-    fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-30, tickfont=dict(size=11))
-
-    # --- etiquetas de totales mejor posicionadas y responsivas ---
-    totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
     n_bars = len(order_axis)
-    max_digits = len(str(int(totals.max()))) if len(totals) else 1
-    lab_size = max(11, min(16, 15 - max(0, max_digits - 3)))
-    pad_frac = 0.14 + 0.01 * (lab_size - 11)
-    y_max = float(totals.max()) * (1 + pad_frac)
-    fig.update_yaxes(range=[0, y_max], automargin=True)
+    show_totals = n_bars <= 12  # [MOBILE] evita mezcla de etiquetas si hay muchos
+    tick_angle = -65 if n_bars > 8 else -30
 
-    pixel_up = 6 + lab_size * 1.0
-    annotations = []
-    for x_val, y_val in totals.items():
-        annotations.append(dict(
-            x=x_val, y=y_val, xref="x", yref="y",
-            text=f"{int(y_val):,}".replace(",", "."),
-            showarrow=False, yanchor="bottom", yshift=pixel_up,
-            align="center", font=dict(size=lab_size, color=ANN_COL)
-        ))
-    prev = list(fig.layout.annotations) if fig.layout.annotations else []
-    fig.update_layout(annotations=prev + annotations)
-    # -------------------------------------------------------------
+    # [MOBILE] Si hay muchos usuarios, usa orientación horizontal para mejor lectura
+    if n_bars > 14:
+        hover_tmpl_h = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
+        height = max(440, 22*n_bars + 120)
+        fig = px.bar(
+            cnt, y="UsuarioTurnoShort", x="CNT", color="ItemExt", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt","CNT","UsuarioTurnoShort"], height=height, orientation="h"
+        )
+        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
+        totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
+        fig.add_trace(go.Scatter(x=totals.values, y=totals.index.tolist(), mode="text",
+                                 text=[f"{int(v):,}".replace(",", ".") for v in totals.values],
+                                 textposition="middle right", textfont=dict(size=11, color=ANN_COL),
+                                 showlegend=False, hoverinfo="skip"))
+        xmax = max(1, float(totals.max()))
+        fig.update_xaxes(range=[0, xmax*1.08])
+        _responsive_bar_style(fig, n_bars)
+        fig.update_layout(margin=dict(t=40, b=10, l=10, r=110), legend_title_text="Ítem")
+    else:
+        hover_tmpl = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
+        height = max(520, 26*n_bars + 100)  # [MOBILE] alto dinámico
+        fig = px.bar(
+            cnt, x="UsuarioTurnoShort", y="CNT", color="ItemExt", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt","CNT","UsuarioTurnoShort"], height=height
+        )
+        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, cliponaxis=False)
+        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
 
-    _responsive_bar_style(fig, n_bars)
-    fig.update_layout(margin=dict(t=50, b=10, l=10, r=100), legend_title_text="Ítem")
+        totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
+        max_digits = len(str(int(totals.max()))) if len(totals) else 1
+        lab_size = max(10, min(14, 15 - max(0, max_digits - 3)))
+        pad_frac = 0.16 + 0.01 * (lab_size - 10)
+        y_max = float(totals.max()) * (1 + pad_frac)
+        fig.update_yaxes(range=[0, y_max], automargin=True)
+        if show_totals:
+            pixel_up = 6 + lab_size * 1.0
+            annotations = []
+            for x_val, y_val in totals.items():
+                annotations.append(dict(
+                    x=x_val, y=y_val, xref="x", yref="y",
+                    text=f"{int(y_val):,}".replace(",", "."),
+                    showarrow=False, yanchor="bottom", yshift=pixel_up,
+                    align="center", font=dict(size=lab_size, color=ANN_COL)
+                ))
+            prev = list(fig.layout.annotations) if fig.layout.annotations else []
+            fig.update_layout(annotations=prev + annotations)
+
+        _responsive_bar_style(fig, n_bars)
+        fig.update_layout(margin=dict(t=50, b=10, l=10, r=100), legend_title_text="Ítem")
+
     apply_plot_theme(fig)
 
     c1, c2 = st.columns([3, 1])
@@ -918,17 +955,22 @@ def view_inicio_fin_turno():
 
     hover_tmpl = "Hito: %{customdata[0]}<br>Hora: %{customdata[1]}<br>%{customdata[2]}<br>Ítem más común: %{customdata[3]}<br>Horas extra: %{customdata[4]}<extra></extra>"
 
+    # [MOBILE] alto dinámico y rotación de etiquetas
+    height = max(480, 26*len(order_axis) + 120)
     fig = px.bar(m, x="UsuarioTurnoShort", y="Seg", color="Hito", barmode="stack",
                  category_orders={"UsuarioTurnoShort": order_axis, "Hito": ["Inicio","Antes de alimentación","Antes de cierre"]},
                  color_discrete_map={"Inicio":"#1F77B4","Antes de alimentación":"#E4572E","Antes de cierre":"#2CA02C"},
-                 custom_data=["Hito","Hora","Info","Item","Extra"], height=480)
-    fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.96)
-    fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-30, tickfont=dict(size=11))
+                 custom_data=["Hito","Hora","Info","Item","Extra"], height=height)
+    fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.96, cliponaxis=False)
+    fig.update_xaxes(categoryorder="array", categoryarray=order_axis,
+                     tickangle=(-65 if len(order_axis) > 8 else -30), tickfont=dict(size=10))
     fig.update_yaxes(tickvals=ticks, ticktext=ticktext, title="Hora del día (HH:MM)")
-    fig.add_trace(go.Scatter(x=top_per_bar.index.tolist(), y=top_per_bar.values,
-                             mode="text", text=[fmt_hhmm(v) for v in top_per_bar.values],
-                             textposition="top center", textfont=dict(size=12, color=ANN_COL),
-                             showlegend=False, hoverinfo="skip"))
+    # [MOBILE] Oculta etiquetas de hora en la cima si hay demasiadas barras (evita amontonamiento)
+    if len(order_axis) <= 12:
+        fig.add_trace(go.Scatter(x=top_per_bar.index.tolist(), y=top_per_bar.values,
+                                 mode="text", text=[fmt_hhmm(v) for v in top_per_bar.values],
+                                 textposition="top center", textfont=dict(size=11, color=ANN_COL),
+                                 showlegend=False, hoverinfo="skip"))
     _responsive_bar_style(fig, len(order_axis))
     fig.update_layout(margin=dict(t=10,b=10,l=10,r=160), legend_title_text="Hito")
     apply_plot_theme(fig)
