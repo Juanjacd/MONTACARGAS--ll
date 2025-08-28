@@ -60,7 +60,6 @@ BASE_STYLE = f"""
 :root{{
   --bg:#ffffff; --panel:#f8fafc; --ink:#0f172a; --muted:#64748b; --border:#e5e7eb;
   --accent:#0ea5e9;
-  /* altura real del header (ajústala si tu build es distinta) */
   --header-h: 64px;
 }}
 
@@ -70,11 +69,9 @@ header[data-testid="stHeader"]{{
   background-color: var(--bg) !important;
   border-bottom:1px solid var(--border) !important;
 }}
-/* Empuja el contenido para que el header no tape el hero */
 [data-testid="stAppViewContainer"] > .main{{
   padding-top: calc(var(--header-h) + 12px) !important;
 }}
-/* Evita doble padding interno de Streamlit */
 main .block-container{{ padding-top: 0 !important; }}
 
 /* ===== Colores base ===== */
@@ -100,7 +97,6 @@ div.hero{{
 .hero-wrap{{ display:flex; flex-direction:column; gap:.25rem; width:100%; }}
 h1.hero-title{{ 
   margin:0; line-height:1.15; font-weight:800; color:var(--ink);
-  /* tamaño fluido para cualquier ancho */
   font-size: clamp(20px, 2.6vw + 8px, 34px);
   text-wrap: balance; overflow-wrap:anywhere;
 }}
@@ -124,6 +120,11 @@ input, textarea{{ background:var(--bg)!important; color:var(--ink)!important;
 
 /* Usuarios en ejes en negrita */
 g.xtick text, g.ytick text{{ font-weight:700; }}
+
+/* ======== Oscuro por defecto en móviles (≤680px) ======== */
+@media (max-width: 680px){{
+  :root{{ --bg:#0b1220; --panel:#0f172a; --ink:#e5e7eb; --muted:#cbd5e1; --border:#1f2937; --accent:#22d3ee; }}
+}}
 </style>
 
 <div class="hero"><div class="hero-wrap">
@@ -136,7 +137,7 @@ st.markdown(BASE_STYLE, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("---")
-    dark = st.checkbox("🌙 Modo oscuro", value=False, help="Cambia colores (app + gráficas)")
+    dark = st.checkbox("🌙 Modo oscuro", value=False, help="PC claro por defecto. En móvil, oscuro por defecto.")
 
 if dark:
     st.markdown("""
@@ -163,8 +164,7 @@ def apply_plot_theme(fig):
         paper_bgcolor=("#0f172a" if is_dark else "#ffffff"),
         plot_bgcolor=("#0b1220" if is_dark else "#ffffff"),
         font=dict(color=("#e5e7eb" if is_dark else "#0f172a")),
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
-                    bgcolor="rgba(0,0,0,0)"),
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0)"),
         showlegend=True
     )
     fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="")
@@ -193,7 +193,7 @@ EXT_ITEMS = [
     ITEM_WAZ, ITEM_BODEGA, "UBIC.SOBRESTOCK","REACOM.SOBRESTOCK"
 ]
 
-ITEMS_HIDDEN = []  # puedes dejarlo vacío
+ITEMS_HIDDEN = []
 
 PALETTES = {
   "Petróleo & Tierra": {
@@ -521,13 +521,21 @@ with st.sidebar:
 
     sel_users = st.multiselect("Usuarios", users, [])
     sel_turns = st.multiselect("Turnos", turns, [])
-    sel_range = st.date_input("Rango de fechas", (fmin, fmax))
 
-start_ts, end_ts = (
-    (pd.Timestamp(sel_range[0]), pd.Timestamp(sel_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
-    if isinstance(sel_range, (list, tuple)) and len(sel_range) == 2
-    else (pd.Timestamp(fmin), pd.Timestamp(fmax) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
-)
+    # --- Formulario de fechas como en PC (Aplicar) ---
+    with st.form("f_fechas"):
+        d0 = st.date_input("Desde", value=fmin, min_value=fmin, max_value=fmax, format="YYYY-MM-DD")
+        d1 = st.date_input("Hasta",  value=fmax, min_value=fmin, max_value=fmax, format="YYYY-MM-DD")
+        ok = st.form_submit_button("Aplicar")
+
+if ok or "range" not in st.session_state:
+    if d1 < d0: d0, d1 = d1, d0
+    st.session_state["range"] = (d0, d1)
+
+d0, d1 = st.session_state["range"]
+start_ts = pd.Timestamp(d0)
+end_ts   = pd.Timestamp(d1) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+
 df_pre = df.copy()
 if sel_users: df_pre = df_pre[df_pre["Usuario"].isin(sel_users)]
 if sel_turns: df_pre = df_pre[df_pre["Turno"].isin(sel_turns)]
@@ -542,14 +550,14 @@ def classify_any(row) -> Optional[str]:
 if "ItemExt" not in df_pre.columns:
     df_pre["ItemExt"] = df_pre.apply(lambda r: classify_any(r), axis=1)
 
-# --------- Ítems sin chips preseleccionados (sidebar derecha) ---------
+# --------- Ítems (sidebar) ---------
 avail_items = [it for it in EXT_ITEMS if it in set(df_pre["ItemExt"].dropna().unique().tolist())]
-default_items = []  # nada preseleccionado
+default_items = []
 with st.sidebar:
     sel_items = st.multiselect("Ítems", avail_items, default_items, key="items_selector")
-# Dataset FINAL: si no hay selección, usar todo
+
+# Dataset FINAL
 df_f = df_pre[df_pre["ItemExt"].isin(sel_items)].copy() if sel_items else df_pre.copy()
-# ----------------------------------------------------------------------
 
 with st.sidebar:
     st.markdown("---")
@@ -672,7 +680,7 @@ def view_tm_por_usuario_turno():
 
         totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
         fig.add_trace(go.Scatter(x=totals.values, y=totals.index.tolist(), mode="text",
-                                 text=[f"{v:.0f} min" for v in totals.values],
+                                 text=[f"{int(v)} min" for v in totals.values],
                                  textposition="middle right", textfont=dict(size=12, color=ANN_COL),
                                  showlegend=False, hoverinfo="skip"))
         xmax = max(1, float(totals.max()))
@@ -691,7 +699,7 @@ def view_tm_por_usuario_turno():
         fig.update_yaxes(range=[0, ymax])
         fig.add_trace(go.Bar(x=totals.index.tolist(), y=totals.values,
                              marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
-                             text=[f"{v:.0f} min" for v in totals.values],
+                             text=[f"{int(v)} min" for v in totals.values],
                              textposition="outside", textfont=dict(size=11, color=ANN_COL)))
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=10), legend_title_text="Ítem")
@@ -730,7 +738,7 @@ def view_ordenes_ot():
     fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95)
     fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=-30, tickfont=dict(size=11))
 
-    # --- etiquetas de totales mejor posicionadas y responsivas ---
+    # --- etiquetas de totales sin decimales ---
     totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
     n_bars = len(order_axis)
     max_digits = len(str(int(totals.max()))) if len(totals) else 1
@@ -750,7 +758,6 @@ def view_ordenes_ot():
         ))
     prev = list(fig.layout.annotations) if fig.layout.annotations else []
     fig.update_layout(annotations=prev + annotations)
-    # -------------------------------------------------------------
 
     _responsive_bar_style(fig, n_bars)
     fig.update_layout(margin=dict(t=50, b=10, l=10, r=100), legend_title_text="Ítem")
@@ -907,8 +914,6 @@ def view_inicio_fin_turno():
     fig.update_layout(margin=dict(t=10,b=10,l=10,r=160), legend_title_text="Hito")
     apply_plot_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
-
-    # (Tabla de horas extra eliminada por solicitud)
 
 # =========================================================
 # [S12] Render
