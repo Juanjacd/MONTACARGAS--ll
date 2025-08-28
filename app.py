@@ -302,12 +302,14 @@ def _contains_any(txt: str, patterns: List[str]) -> bool:
 def _item_base(ubic_proced: str, ubic_dest: str) -> Optional[str]:
     up = str(ubic_proced or ""); ud = str(ubic_dest or "")
     both_txt = f"{up} | {ud}"; compact = _norm_compact(both_txt); toks = set(_norm_tokens(both_txt))
-    if "wazone" in compact or ("wa" in toks and "zone" in toks) or "zonav" in compact: return ITEM_WAZONE
+    # [FIX] usar la constante correcta
+    if "wazone" in compact or ("wa" in toks and "zone" in toks) or "zonav" in compact: return ITEM_WAZ
     if _contains_any(compact, ["transfer","traslado","trasl","transferen","trasfer","transfe","transf"]): return "TRANSFER"
     if _contains_any(compact, ["inspeccion","inspection","inspec","insp","insp."]): return "INSPECCIÓN"
     if _contains_any(compact, ["carpa","carpas"]): return "CARPA"
     if ("calidad" in toks and "ok" in toks) or "calidadok" in compact or "okcalidad" in compact: return "CALIDAD-OK"
     return None
+
 
 def _norm_label(s: str) -> str:
     s = _norm_nfd_ascii(str(s or "")).lower()
