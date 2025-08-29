@@ -280,17 +280,15 @@ def pick_col(cols_map: dict, *aliases) -> Optional[str]:
             if key in nk or nk in key: return orig
     return None
 
-# [FIX-HORA] Parser robusto para horas con "a. m." / "p. m." y 24h
+# [FIX-HORA] Parser robusto para “5:34:48 a. m.” / “p. m.”, NBSP y 12/24h
 def to_time(x):
     if pd.isna(x):
         return None
-    # Si viene como datetime/tiempo real desde Excel
     try:
         if hasattr(x, "hour"):
             return dtime(int(x.hour), int(getattr(x, "minute", 0)), int(getattr(x, "second", 0)))
     except Exception:
         pass
-    # Si viene como número serial de Excel
     if isinstance(x, (int, float)) and not pd.isna(x):
         try:
             dtv = pd.to_datetime(x, unit="d", origin="1899-12-30")
@@ -301,27 +299,23 @@ def to_time(x):
     s = str(x).strip()
     if not s:
         return None
-
-    # Normaliza AM/PM en español -> AM/PM en inglés
-    s_norm = re.sub(r"\s+", " ", s, flags=re.I)
-    s_norm = re.sub(r"(?i)\b(a\.?\s*m\.?)\b", "AM", s_norm)
-    s_norm = re.sub(r"(?i)\b(p\.?\s*m\.?)\b", "PM", s_norm)
+    # normaliza espacios duros y AM/PM español
+    s_norm = s.replace("\u00A0", " ").replace("\u202F", " ")
+    s_norm = re.sub(r"\s+", " ", s_norm).strip()
+    s_norm = re.sub(r"(?i)\ba\.?\s*m\.?\b", "AM", s_norm)
+    s_norm = re.sub(r"(?i)\bp\.?\s*m\.?\b", "PM", s_norm)
     s_norm = s_norm.replace("a.m.", "AM").replace("p.m.", "PM").replace("a.m", "AM").replace("p.m", "PM")
 
-    # Intenta 12h con AM/PM y luego 24h
     for fmt in ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M"):
         try:
             dtv = pd.to_datetime(s_norm, format=fmt)
             return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0)))
         except Exception:
             pass
-
-    # Último intento laxo
     dtv = pd.to_datetime(s_norm, errors="coerce")
     if pd.notnull(dtv):
         return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0)))
     return None
-
 
 def turno_by_time(t: dtime):
     if t is None: return None
@@ -347,7 +341,7 @@ def _contains_any(txt: str, patterns: List[str]) -> bool:
 def _item_base(ubic_proced: str, ubic_dest: str) -> Optional[str]:
     up = str(ubic_proced or ""); ud = str(ubic_dest or "")
     both_txt = f"{up} | {ud}"; compact = _norm_compact(both_txt); toks = set(_norm_tokens(both_txt))
-    if "wazone" in compact or ("wa" in toks and "zone" in toks) or "zonav" in compact: return ITEM_WAZ  # [MOBILE] bugfix constante
+    if "wazone" in compact or ("wa" in toks and "zone" in toks) or "zonav" in compact: return ITEM_WAZ  # [BUGFIX-CONSTANTE]
     if _contains_any(compact, ["transfer","traslado","trasl","transferen","trasfer","transfe","transf"]): return "TRANSFER"
     if _contains_any(compact, ["inspeccion","inspection","inspec","insp","insp."]): return "INSPECCIÓN"
     if _contains_any(compact, ["carpa","carpas"]): return "CARPA"
@@ -454,7 +448,7 @@ def read_all(path) -> pd.DataFrame:
                        "ubic_proced":"Ubic.proced","ubic_destino":"Ubicación de destino",
                        "itemraw":"ItemRaw"}, inplace=True)
     df["Datetime"] = pd.to_datetime(df["Datetime"], errors="coerce")
-    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce").dt.date
+    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", dayfirst=True).dt.date  # [FECHA-DDMM]
     df["Time"] = df["Datetime"].dt.time
     return df
 
@@ -505,7 +499,7 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
 
     out = pd.DataFrame({
         "Usuario": df[col_usuario].astype(str).str.strip(),
-        "Fecha":   pd.to_datetime(df[col_fecha], errors="coerce").dt.date,
+        "Fecha":   pd.to_datetime(df[col_fecha], errors="coerce", dayfirst=True).dt.date,  # [FECHA-DDMM]
         "Time":    df[col_hora].apply(to_time),
     })
     out["Hora"] = out["Time"].apply(lambda t: t.hour if t else None)
@@ -1006,12 +1000,12 @@ def view_inicio_fin_turno():
         fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.96, cliponaxis=False)
         fig.update_xaxes(categoryorder="array", categoryarray=order_axis,
                          tickangle=(-65 if len(order_axis) > 8 else -30), tickfont=dict(size=10))
-        fig.update_yaxes(tickvals=ticks, ticktext=ticktext, title="Hora del día (HH:MM)")
         if len(order_axis) <= 12:
             fig.add_trace(go.Scatter(x=top_per_bar.index.tolist(), y=top_per_bar.values,
                                      mode="text", text=[fmt_hhmm(v) for v in top_per_bar.values],
                                      textposition="top center", textfont=dict(size=11, color=ANN_COL),
                                      showlegend=False, hoverinfo="skip"))
+        fig.update_yaxes(tickvals=ticks, ticktext=ticktext, title="Hora del día (HH:MM)")
 
     _responsive_bar_style(fig, len(order_axis))
     fig.update_layout(margin=dict(t=10,b=10,l=10,r=160), legend_title_text="Hito")
