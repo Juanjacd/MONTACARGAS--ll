@@ -280,24 +280,48 @@ def pick_col(cols_map: dict, *aliases) -> Optional[str]:
             if key in nk or nk in key: return orig
     return None
 
+# [FIX-HORA] Parser robusto para horas con "a. m." / "p. m." y 24h
 def to_time(x):
-    if pd.isna(x): return None
+    if pd.isna(x):
+        return None
+    # Si viene como datetime/tiempo real desde Excel
     try:
         if hasattr(x, "hour"):
-            return dtime(int(x.hour), int(getattr(x,"minute",0)), int(getattr(x,"second",0)))
-    except Exception: pass
-    if isinstance(x, (int,float)) and not pd.isna(x):
+            return dtime(int(x.hour), int(getattr(x, "minute", 0)), int(getattr(x, "second", 0)))
+    except Exception:
+        pass
+    # Si viene como número serial de Excel
+    if isinstance(x, (int, float)) and not pd.isna(x):
         try:
             dtv = pd.to_datetime(x, unit="d", origin="1899-12-30")
             return dtime(int(dtv.hour), int(dtv.minute), int(dtv.second))
-        except Exception: pass
+        except Exception:
+            pass
+
     s = str(x).strip()
-    for fmt in ("%H:%M:%S","%H:%M"):
+    if not s:
+        return None
+
+    # Normaliza AM/PM en español -> AM/PM en inglés
+    s_norm = re.sub(r"\s+", " ", s, flags=re.I)
+    s_norm = re.sub(r"(?i)\b(a\.?\s*m\.?)\b", "AM", s_norm)
+    s_norm = re.sub(r"(?i)\b(p\.?\s*m\.?)\b", "PM", s_norm)
+    s_norm = s_norm.replace("a.m.", "AM").replace("p.m.", "PM").replace("a.m", "AM").replace("p.m", "PM")
+
+    # Intenta 12h con AM/PM y luego 24h
+    for fmt in ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M"):
         try:
-            dtv = pd.to_datetime(s, format=fmt); return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv,"second",0)))
-        except Exception: pass
-    dtv = pd.to_datetime(s, errors="coerce")
-    return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv,"second",0))) if pd.notnull(dtv) else None
+            dtv = pd.to_datetime(s_norm, format=fmt)
+            return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0)))
+        except Exception:
+            pass
+
+    # Último intento laxo
+    dtv = pd.to_datetime(s_norm, errors="coerce")
+    if pd.notnull(dtv):
+        return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0)))
+    return None
+
 
 def turno_by_time(t: dtime):
     if t is None: return None
