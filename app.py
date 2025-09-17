@@ -13,7 +13,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import sqlite3, hashlib, re, unicodedata
+import sqlite3, hashlib, re, unicodedata, os
 from datetime import time as dtime
 from typing import Optional, List
 from collections import Counter
@@ -62,124 +62,49 @@ BASE_STYLE = f"""
   --accent:#0ea5e9;
   --header-h: 64px;
 }}
-
-/* ===== Header fijo + separación del contenido ===== */
-header[data-testid="stHeader"]{{
-  height: var(--header-h) !important;
-  background-color: var(--bg) !important;
-  border-bottom:1px solid var(--border) !important;
-  z-index: 500; /* [MOBILE] asegura que no tape controles */
-}}
-/* Empuja el contenido para que el header no tape el hero */
-[data-testid="stAppViewContainer"] > .main{{
-  padding-top: calc(var(--header-h) + 12px) !important;
-}}
-/* Evita doble padding interno de Streamlit */
+header[data-testid="stHeader"]{{ height: var(--header-h) !important; background-color: var(--bg) !important; border-bottom:1px solid var(--border) !important; z-index: 500; }}
+[data-testid="stAppViewContainer"] > .main{{ padding-top: calc(var(--header-h) + 12px) !important; }}
 main .block-container{{ padding-top: 0 !important; }}
-
-/* ===== Colores base ===== */
-html, body, #root, .stApp,
-main, .main,
-[data-testid="stAppViewContainer"],
-[data-testid="stSidebar"]{{
-  background-color: var(--bg) !important;
-  color: var(--ink) !important;
-}}
-section[data-testid="stSidebar"]{{
-  background-color: var(--panel) !important;
-  border-right:1px solid var(--border);
-}}
-
-/* ===== Tarjetas/títulos ===== */
-div.hero{{ 
-  margin: 0 !important;
-  width: 100%;
-  border:1px solid var(--border); border-radius:14px;
-  padding:14px 16px; background:var(--panel);
-}}
+html, body, #root, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stSidebar"]{{ background-color: var(--bg) !important; color: var(--ink) !important; }}
+section[data-testid="stSidebar"]{{ background-color: var(--panel) !important; border-right:1px solid var(--border); }}
+div.hero{{ margin:0; width:100%; border:1px solid var(--border); border-radius:14px; padding:14px 16px; background:var(--panel); }}
 .hero-wrap{{ display:flex; flex-direction:column; gap:.25rem; width:100%; }}
-h1.hero-title{{ 
-  margin:0; line-height:1.15; font-weight:800; color:var(--ink);
-  font-size: clamp(20px, 2.6vw + 8px, 34px);
-  text-wrap: balance; overflow-wrap:anywhere;
-}}
+h1.hero-title{{ margin:0; line-height:1.15; font-weight:800; color:var(--ink); font-size: clamp(20px, 2.6vw + 8px, 34px); text-wrap: balance; overflow-wrap:anywhere; }}
 div.hero-sub{{ font-size:clamp(12px, 1.1vw + 8px, 15px); color:var(--muted); }}
-
 h2.section-title{{ font-weight:700; font-size:18px; margin:0; color:var(--ink); }}
 div.section{{ border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--panel); margin:14px 0 8px 0; }}
-
 .note-box{{ border:1px solid var(--border); border-radius:12px; padding:12px 14px; background:var(--panel); color:var(--ink); font-size:14px; }}
 .kpi-card{{ border:1px solid var(--border); background:var(--panel); border-radius:14px; padding:12px 14px; margin-left:10px; color:var(--ink); max-width:420px; }}
 .kpi-title{{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:20px; margin:2px 0 12px 0; }}
 .kpi-grid{{ display:grid; grid-template-columns: 1fr; gap:12px; }}
 .kpi-item .label{{ color:var(--muted); font-size:13px; margin-bottom:2px; }}
 .kpi-item .value{{ color:var(--ink); font-size:32px; font-weight:800; }}
-
-/* ===== Inputs ===== */
 [data-baseweb="select"]>div{{ border-radius:10px; border:1px solid var(--border); background:var(--bg); }}
 [data-baseweb="select"]>div:focus-within{{ box-shadow:0 0 0 2px var(--accent); border-color:var(--accent); }}
-input, textarea{{ background:var(--bg)!important; color:var(--ink)!important;
-  border-radius:10px!important; border:1px solid var(--border)!important; }}
-
-/* Usuarios en ejes en negrita */
+input, textarea{{ background:var(--bg)!important; color:var(--ink)!important; border-radius:10px!important; border:1px solid var(--border)!important; }}
 g.xtick text, g.ytick text{{ font-weight:700; }}
-
-/* ===== [MOBILE] Flecha para abrir/cerrar sidebar siempre visible ===== */
-[data-testid="collapsedControl"]{{
-  position: fixed !important; /* [MOBILE] que no la tape nada */
-  top: 10px; left: 10px;
-  z-index: 2000 !important;
-  display: flex !important; visibility: visible !important; opacity: 1 !important;
-}}
+[data-testid="collapsedControl"]{{ position: fixed !important; top: 10px; left: 10px; z-index: 2000 !important; display:flex!important; visibility:visible!important; opacity:1!important; }}
 [data-testid="collapsedControl"] svg{{ color: var(--ink) !important; fill: currentColor !important; }}
-
-/* =========================
-   [MOBILE] Ajustes responsivos
-   ========================= */
 @media (max-width: 768px){{
-  /* [MOBILE] separa visualmente sidebar del tablero (no se "juntan") */
-  section[data-testid="stSidebar"]{{
-    position: relative !important;
-    z-index: 1200 !important;
-    box-shadow: 0 6px 20px rgba(0,0,0,.35);
-    border-right:1px solid var(--border);
-  }}
+  section[data-testid="stSidebar"]{{ position: relative !important; z-index: 1200 !important; box-shadow: 0 6px 20px rgba(0,0,0,.35); border-right:1px solid var(--border); }}
   [data-testid="stAppViewContainer"]{{ position: relative; z-index: 1; }}
-
-  /* [MOBILE] scrollbar interno del sidebar para que no invada el tablero */
-  section[data-testid="stSidebar"] > div{{
-    max-height: calc(100vh - var(--header-h) - 8px);
-    overflow-y: auto;
-  }}
-
-  /* [MOBILE] padding contenido más compacto */
+  section[data-testid="stSidebar"] > div{{ max-height: calc(100vh - var(--header-h) - 8px); overflow-y: auto; }}
   .block-container{{ padding: 8px 10px !important; }}
-
-  /* [MOBILE] textos de ejes/leyenda ligeramente más grandes */
   .js-plotly-plot .xtick text, .js-plotly-plot .ytick text{{ font-size:11px !important; }}
   .js-plotly-plot .legend text{{ font-size:11px !important; }}
-
-  /* [MOBILE] evita cortes de labels */
   .main-svg{{ overflow: visible !important; }}
 }}
-
-/* [MOBILE] popover del datepicker y selects por encima (no se cierra al cambiar mes) */
-[data-baseweb="popover"], .stDateInput [role="dialog"], .stDateInput div[data-baseweb="popover"]{{
-  z-index: 3000 !important;
-}}
+[data-baseweb="popover"], .stDateInput [role="dialog"], .stDateInput div[data-baseweb="popover"]{{ z-index: 3000 !important; }}
 </style>
-
 <div class="hero"><div class="hero-wrap">
   <h1 class="hero-title">{APP_TITLE}</h1>
   <div class="hero-sub">{APP_TAGLINE}</div>
 </div></div>
 """
-
 st.markdown(BASE_STYLE, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("---")
-    # [MOBILE] Modo oscuro por defecto para que app + gráficas arranquen consistentes
     dark = st.checkbox("🌙 Modo oscuro", value=True, help="Cambia colores (app + gráficas)")
 
 if dark:
@@ -209,9 +134,8 @@ def apply_plot_theme(fig):
         font=dict(color=("#e5e7eb" if is_dark else "#0f172a")),
         legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0)"),
         showlegend=True,
-        hoverlabel=dict(font_size=12)  # [MOBILE]
+        hoverlabel=dict(font_size=12)
     )
-    # [MOBILE] ejes en enteros
     fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
     fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
 
@@ -237,8 +161,7 @@ EXT_ITEMS = [
     "CALIDAD-OK","TRANSFER","INSPECCIÓN","CARPA",
     ITEM_WAZ, ITEM_BODEGA, "UBIC.SOBRESTOCK","REACOM.SOBRESTOCK"
 ]
-
-ITEMS_HIDDEN = []  # puedes dejarlo vacío
+ITEMS_HIDDEN = []
 
 PALETTES = {
   "Petróleo & Tierra": {
@@ -280,38 +203,29 @@ def pick_col(cols_map: dict, *aliases) -> Optional[str]:
             if key in nk or nk in key: return orig
     return None
 
-# [FIX-HORA] Parser robusto para “5:34:48 a. m.” / “p. m.”, NBSP y 12/24h
 def to_time(x):
-    if pd.isna(x):
-        return None
+    if pd.isna(x): return None
     try:
         if hasattr(x, "hour"):
             return dtime(int(x.hour), int(getattr(x, "minute", 0)), int(getattr(x, "second", 0)))
-    except Exception:
-        pass
+    except Exception: pass
     if isinstance(x, (int, float)) and not pd.isna(x):
         try:
             dtv = pd.to_datetime(x, unit="d", origin="1899-12-30")
             return dtime(int(dtv.hour), int(dtv.minute), int(dtv.second))
-        except Exception:
-            pass
-
+        except Exception: pass
     s = str(x).strip()
-    if not s:
-        return None
-    # normaliza espacios duros y AM/PM español
+    if not s: return None
     s_norm = s.replace("\u00A0", " ").replace("\u202F", " ")
     s_norm = re.sub(r"\s+", " ", s_norm).strip()
     s_norm = re.sub(r"(?i)\ba\.?\s*m\.?\b", "AM", s_norm)
     s_norm = re.sub(r"(?i)\bp\.?\s*m\.?\b", "PM", s_norm)
     s_norm = s_norm.replace("a.m.", "AM").replace("p.m.", "PM").replace("a.m", "AM").replace("p.m", "PM")
-
     for fmt in ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M"):
         try:
             dtv = pd.to_datetime(s_norm, format=fmt)
             return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0)))
-        except Exception:
-            pass
+        except Exception: pass
     dtv = pd.to_datetime(s_norm, errors="coerce")
     if pd.notnull(dtv):
         return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0)))
@@ -341,7 +255,7 @@ def _contains_any(txt: str, patterns: List[str]) -> bool:
 def _item_base(ubic_proced: str, ubic_dest: str) -> Optional[str]:
     up = str(ubic_proced or ""); ud = str(ubic_dest or "")
     both_txt = f"{up} | {ud}"; compact = _norm_compact(both_txt); toks = set(_norm_tokens(both_txt))
-    if "wazone" in compact or ("wa" in toks and "zone" in toks) or "zonav" in compact: return ITEM_WAZ  # [BUGFIX-CONSTANTE]
+    if "wazone" in compact or ("wa" in toks and "zone" in toks) or "zonav" in compact: return ITEM_WAZ
     if _contains_any(compact, ["transfer","traslado","trasl","transferen","trasfer","transfe","transf"]): return "TRANSFER"
     if _contains_any(compact, ["inspeccion","inspection","inspec","insp","insp."]): return "INSPECCIÓN"
     if _contains_any(compact, ["carpa","carpas"]): return "CARPA"
@@ -448,7 +362,7 @@ def read_all(path) -> pd.DataFrame:
                        "ubic_proced":"Ubic.proced","ubic_destino":"Ubicación de destino",
                        "itemraw":"ItemRaw"}, inplace=True)
     df["Datetime"] = pd.to_datetime(df["Datetime"], errors="coerce")
-    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", dayfirst=True).dt.date  # [FECHA-DDMM]
+    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", dayfirst=True).dt.date
     df["Time"] = df["Datetime"].dt.time
     return df
 
@@ -462,13 +376,10 @@ def apply_oper_day(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
     if "Turno" not in d.columns or d["Turno"].isna().any():
         d["Turno"] = d["Time"].apply(turno_by_time)
-
     extra_mask = (d["Turno"] == "Turno B") & (d["Time"].apply(lambda x: x is not None and x < LATE_B_CUTOFF))
     d["IsExtra"] = extra_mask
-
     d["FechaOper"] = pd.to_datetime(d["Fecha"])
     d.loc[extra_mask, "FechaOper"] = d.loc[extra_mask, "FechaOper"] - pd.Timedelta(days=1)
-
     d["DatetimeOper"] = d.apply(
         lambda r: pd.Timestamp.combine(pd.Timestamp(r["FechaOper"]).date(), r["Time"]) if (pd.notnull(r["FechaOper"]) and r["Time"] is not None) else pd.NaT,
         axis=1
@@ -499,7 +410,7 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
 
     out = pd.DataFrame({
         "Usuario": df[col_usuario].astype(str).str.strip(),
-        "Fecha":   pd.to_datetime(df[col_fecha], errors="coerce", dayfirst=True).dt.date,  # [FECHA-DDMM]
+        "Fecha":   pd.to_datetime(df[col_fecha], errors="coerce", dayfirst=True).dt.date,
         "Time":    df[col_hora].apply(to_time),
     })
     out["Hora"] = out["Time"].apply(lambda t: t.hour if t else None)
@@ -517,21 +428,24 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
     return out[["Usuario","Fecha","Hora","Time","Turno","Datetime","Orden","Ubic.proced","Ubicación de destino","ItemRaw"]]
 
 # =========================================================
-# [S7] Sidebar: carga + preferencias + filtros
+# [S7] Sidebar: carga + preferencias + filtros  (AUTO LOCAL + fallback uploader)
 # =========================================================
 with st.sidebar:
-    with st.expander("📥 Carga de datos", expanded=False):
-        up = st.file_uploader("📎 Excel (.xlsx)", type=["xlsx"])
-        if up is not None:
-            try:
-                xls_tmp = pd.ExcelFile(up); hojas = xls_tmp.sheet_names
-                hoja = st.selectbox("Hoja", hojas, index=hojas.index("Hoja1") if "Hoja1" in hojas else 0)
-            except Exception:
-                hoja = st.text_input("Hoja", value="Hoja1")
-            finally:
-                if hasattr(up,"seek"): up.seek(0)
-        else:
-            hoja = st.text_input("Hoja", value="Hoja1")
+    with st.expander("📥 Carga de datos", expanded=True):
+        auto_local = st.checkbox("Usar archivo local automático", value=True)
+        local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx")
+        up = None
+        hoja = "Hoja1"
+        if not auto_local:
+            up = st.file_uploader("📎 Excel (.xlsx)", type=["xlsx"])
+            if up is not None:
+                try:
+                    xls_tmp = pd.ExcelFile(up); hojas = xls_tmp.sheet_names
+                    hoja = st.selectbox("Hoja", hojas, index=hojas.index("Hoja1") if "Hoja1" in hojas else 0)
+                except Exception:
+                    hoja = st.text_input("Hoja", value="Hoja1")
+                finally:
+                    if hasattr(up, "seek"): up.seek(0)
 
         st.caption("Histórico SQLite")
         use_db = st.checkbox("Usar histórico", value=True)
@@ -548,18 +462,27 @@ with st.sidebar:
 
 EXT_COLOR_MAP = PALETTES[st.session_state.get("pal_name", "Petróleo & Tierra")]
 
-if up is None and 'use_db' in locals() and not use_db:
-    st.warning("Sube un Excel para empezar o activa el histórico."); st.stop()
-
+# --- Carga de datos según modo seleccionado ---
 df_new = pd.DataFrame()
-if up is not None:
-    try: df_new = load_excel(up, hoja)
+if auto_local:
+    if os.path.exists(local_path):
+        try:
+            df_new = load_excel(local_path, "Hoja1")
+        except Exception as e:
+            st.error(f"❌ No pude leer el Excel local:\n{local_path}\n\n{e}")
+            st.stop()
+    else:
+        st.error(f"❌ No encuentro el archivo local:\n{local_path}")
+        st.stop()
+else:
+    if up is None:
+        st.warning("Sube un Excel para empezar o activa el modo local."); st.stop()
+    try:
+        df_new = load_excel(up, hoja)
     except Exception as e:
-        st.error(f"❌ No pude leer el Excel: {e}"); st.stop()
+        st.error(f"❌ No pude leer el Excel subido: {e}"); st.stop()
 
-if 'use_db' not in locals(): use_db = True
-if 'DB_PATH' not in locals(): DB_PATH = "montacargas.db"
-
+# --- Histórico / DB ---
 ensure_db(DB_PATH)
 if use_db:
     if btn_clear: clear_db(DB_PATH); st.success("Histórico limpiado.")
@@ -581,10 +504,9 @@ with st.sidebar:
     users = sorted(df["Usuario"].dropna().unique().tolist())
     turns = ["Turno A","Turno B"]
     fmin, fmax = df["FechaOper"].min().date(), df["FechaOper"].max().date()
-
     sel_users = st.multiselect("Usuarios", users, [])
     sel_turns = st.multiselect("Turnos", turns, [])
-    sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range", format="YYYY-MM-DD")  # [MOBILE] clave estable
+    sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range", format="YYYY-MM-DD")
 
 start_ts, end_ts = (
     (pd.Timestamp(sel_range[0]), pd.Timestamp(sel_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
@@ -605,14 +527,11 @@ def classify_any(row) -> Optional[str]:
 if "ItemExt" not in df_pre.columns:
     df_pre["ItemExt"] = df_pre.apply(lambda r: classify_any(r), axis=1)
 
-# --------- Ítems sin chips preseleccionados (sidebar derecha) ---------
 avail_items = [it for it in EXT_ITEMS if it in set(df_pre["ItemExt"].dropna().unique().tolist())]
-default_items = []  # nada preseleccionado
+default_items = []
 with st.sidebar:
     sel_items = st.multiselect("Ítems", avail_items, default_items, key="items_selector")
-# Dataset FINAL: si no hay selección, usar todo
 df_f = df_pre[df_pre["ItemExt"].isin(sel_items)].copy() if sel_items else df_pre.copy()
-# ----------------------------------------------------------------------
 
 with st.sidebar:
     st.markdown("---")
@@ -655,11 +574,10 @@ def render_kpis(df_filtered: pd.DataFrame):
     """, unsafe_allow_html=True)
 
 # =========================================================
-# [S9] Vista 1 — TM por usuario/turno (usa df_f con filtro de ítems)
+# [S9] Vista 1 — TM por usuario/turno
 # =========================================================
 def view_tm_por_usuario_turno():
     render_section_title("Tiempo Muerto — dos barras por Usuario (Turno A y B), apilado por ítem")
-
     dtmp = df_f.copy()
     df_g = dtmp.sort_values(["Usuario","DatetimeOper"]).copy()
     df_g["prev_dt"] = df_g.groupby("Usuario")["DatetimeOper"].shift(1)
@@ -724,7 +642,7 @@ def view_tm_por_usuario_turno():
 
     chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
     if chart_is_h:
-        height = max(320, 24*len(order_axis) + 110)  # [MOBILE]
+        height = max(320, 24*len(order_axis) + 110)
         fig = px.bar(g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
                      barmode="stack",
                      category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
@@ -743,20 +661,20 @@ def view_tm_por_usuario_turno():
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=110), legend_title_text="Ítem")
     else:
-        height = max(420, 24*len(order_axis) + 60)  # [MOBILE]
+        height = max(420, 24*len(order_axis) + 60)
         fig = px.bar(g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
                      category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
                      color_discrete_map=EXT_COLOR_MAP,
                      custom_data=["ItemExt","Min"], height=height)
         fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
-        tick_angle = -65 if len(order_axis) > 8 else -30  # [MOBILE]
+        tick_angle = -65 if len(order_axis) > 8 else -30
         fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
         totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
         ymax = float(totals.max())*1.18
         fig.update_yaxes(range=[0, ymax])
         fig.add_trace(go.Bar(x=totals.index.tolist(), y=totals.values,
                              marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
-                             text=[f"{v:.0f}" for v in totals.values],  # [MOBILE] sin "min"
+                             text=[f"{v:.0f}" for v in totals.values],
                              textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False))
         _responsive_bar_style(fig, len(order_axis))
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=10), legend_title_text="Ítem")
@@ -765,15 +683,13 @@ def view_tm_por_usuario_turno():
     st.plotly_chart(fig, use_container_width=True)
 
 # =========================================================
-# [S10] Vista 2 — Órdenes OT por usuario/turno (usa df_f)
+# [S10] Vista 2 — Órdenes OT por usuario/turno
 # =========================================================
 def view_ordenes_ot():
     render_section_title("Órdenes OT — total de movimientos por usuario y turno")
-
     cnt = (df_f.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
     if cnt.empty:
         st.info("No hay órdenes en el filtro actual para 'Órdenes OT'."); return
-
     cnt["TurnoAB"] = cnt["Turno"].str.replace("Turno ","", regex=False)
     cnt["UsuarioTurnoShort"] = cnt.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
 
@@ -785,10 +701,9 @@ def view_ordenes_ot():
             if k in present_keys: order_axis.append(k)
 
     n_bars = len(order_axis)
-    show_totals = n_bars <= 12  # [MOBILE]
+    show_totals = n_bars <= 12
     tick_angle = -65 if n_bars > 8 else -30
 
-    # [MOBILE] Muchísimos usuarios => barras horizontales
     if n_bars > 14:
         hover_tmpl_h = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
         height = max(440, 22*n_bars + 120)
@@ -810,7 +725,7 @@ def view_ordenes_ot():
         fig.update_layout(margin=dict(t=40, b=10, l=10, r=110), legend_title_text="Ítem")
     else:
         hover_tmpl = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
-        height = max(520, 26*n_bars + 100)  # [MOBILE]
+        height = max(520, 26*n_bars + 100)
         fig = px.bar(
             cnt, x="UsuarioTurnoShort", y="CNT", color="ItemExt", barmode="stack",
             category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
@@ -819,14 +734,12 @@ def view_ordenes_ot():
         )
         fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, cliponaxis=False)
         fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
-
         totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
         max_digits = len(str(int(totals.max()))) if len(totals) else 1
         lab_size = max(10, min(14, 15 - max(0, max_digits - 3)))
         pad_frac = 0.16 + 0.01 * (lab_size - 10)
         y_max = float(totals.max()) * (1 + pad_frac)
         fig.update_yaxes(range=[0, y_max], automargin=True)
-
         if show_totals:
             pixel_up = 6 + lab_size * 1.0
             annotations = []
@@ -839,36 +752,29 @@ def view_ordenes_ot():
                 ))
             prev = list(fig.layout.annotations) if fig.layout.annotations else []
             fig.update_layout(annotations=prev + annotations)
-
         _responsive_bar_style(fig, n_bars)
         fig.update_layout(margin=dict(t=50, b=10, l=10, r=100), legend_title_text="Ítem")
-
     apply_plot_theme(fig)
-
     c1, c2 = st.columns([3, 1])
     with c1: st.plotly_chart(fig, use_container_width=True)
     with c2: render_kpis(df_f)
 
 # =========================================================
-# [S11] Vista 3 — Inicio/Fin con +24h solo cuando hubo extra (usa df_pre)
+# [S11] Vista 3 — Inicio/Fin
 # =========================================================
 def minutes_of_day(ts: pd.Timestamp) -> float:
     t = ts.time(); return t.hour*60 + t.minute + t.second/60.0
-
 def fmt_hhmm(minutes: float) -> str:
     m = int(round(minutes)); h = m // 60; mm = m % 60
     return f"{h:02d}:{mm:02d}"
-
 def minutes_for_plot(ts: pd.Timestamp, turno: str) -> float:
     m = minutes_of_day(ts)
     if turno == "Turno B" and ts.time() < LATE_B_CUTOFF:
         m += 24*60
     return m
-
 def most_common(lst: List[str]) -> str:
     lst = [x for x in lst if x and str(x).strip() != ""]
     return Counter(lst).most_common(1)[0][0] if lst else "—"
-
 def classify_any_row(row) -> str:
     raw = canon_item_from_text(row.get("ItemRaw"))
     if raw: return raw
@@ -877,21 +783,16 @@ def classify_any_row(row) -> str:
 
 def view_inicio_fin_turno():
     render_section_title("Inicio y fin de turno — hora por Usuario/Turno (promedio o real)")
-
     d = df_pre.copy()
     if "ItemExt_any" not in d.columns:
         d["ItemExt_any"] = d.apply(classify_any_row, axis=1)
-
     recs = []
     for (usr, fecha_op, turno), g in d.sort_values("DatetimeOper").groupby(["Usuario","FechaOper","Turno"]):
         if g.empty: continue
-
         g = g.copy()
         g["t_vis"] = g["DatetimeOper"].apply(lambda ts: minutes_for_plot(ts, turno))
-
         r_ini = g.loc[g["t_vis"].idxmin()]
         t_ini_vis = float(r_ini["t_vis"]); it_ini = r_ini["ItemExt_any"]
-
         lunch_start, _ = TURNOS[turno]["lunch"]
         lunch_mins = lunch_start.hour*60 + lunch_start.minute
         g_pre_l = g[g["t_vis"] < lunch_mins]
@@ -900,12 +801,9 @@ def view_inicio_fin_turno():
             t_alim_vis = float(r_al["t_vis"]); it_alim = r_al["ItemExt_any"]
         else:
             t_alim_vis = None; it_alim = None
-
         r_cie = g.loc[g["t_vis"].idxmax()]
         t_cie_vis = float(r_cie["t_vis"]); it_cie = r_cie["ItemExt_any"]
-
         had_extra = bool(g["IsExtra"].any())
-
         recs.append({
             "Usuario": usr, "Turno": turno, "FechaOper": fecha_op,
             "t_ini": t_ini_vis, "t_alim": t_alim_vis, "t_cie": t_cie_vis,
@@ -915,10 +813,8 @@ def view_inicio_fin_turno():
     if not recs:
         st.info("No se pudieron calcular hitos con el filtro actual."); 
         return
-
     dd = pd.DataFrame(recs)
     one_day = (dd["FechaOper"].nunique() == 1)
-
     agg_rows = []
     for (usr, turno), g in dd.groupby(["Usuario","Turno"]):
         if one_day:
@@ -939,7 +835,6 @@ def view_inicio_fin_turno():
             modo = f"Promedio de {n_dias} días"
             extra_days = int(g["extra"].sum())
             extra_info = f"{extra_days} de {n_dias} días con extra"
-
         agg_rows.append({
             "Usuario": usr, "Turno": turno, "n_dias": n_dias, "modo": modo,
             "t_ini": t_ini, "t_alim": t_alim, "t_cie": t_cie,
@@ -948,11 +843,9 @@ def view_inicio_fin_turno():
         })
     agg = pd.DataFrame(agg_rows)
     if agg.empty: st.info("No hay agregaciones para mostrar."); return
-
     agg["TurnoAB"] = agg["Turno"].str.replace("Turno ","", regex=False)
     agg["UsuarioTurnoShort"] = agg.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
     order_axis = sorted(agg["UsuarioTurnoShort"].unique().tolist())
-
     rows = []
     for _, r in agg.iterrows():
         t_ini = r["t_ini"]; t_alim = r["t_alim"] if pd.notna(r["t_alim"]) else None
@@ -971,16 +864,12 @@ def view_inicio_fin_turno():
         ]
     m = pd.DataFrame(rows)
     top_per_bar = m.groupby("UsuarioTurnoShort")["Seg"].sum().reindex(order_axis)
-
     has_any_extra = (agg["extra_days"] > 0).any()
     base_max = 27*60 if has_any_extra else 24*60
     y_max = max(base_max, int(top_per_bar.max()//60 + 2)*60)
     ticks = list(range(0, y_max+1, 60))
     ticktext = [fmt_hhmm(t) for t in ticks]
-
     hover_tmpl = "Hito: %{customdata[0]}<br>Hora: %{customdata[1]}<br>%{customdata[2]}<br>Ítem más común: %{customdata[3]}<br>Horas extra: %{customdata[4]}<extra></extra>"
-
-    # [MOBILE] Cambia a horizontal si hay muchos usuarios para legibilidad
     many = len(order_axis) > 14
     if many:
         height = max(460, 22*len(order_axis) + 120)
@@ -1006,7 +895,6 @@ def view_inicio_fin_turno():
                                      textposition="top center", textfont=dict(size=11, color=ANN_COL),
                                      showlegend=False, hoverinfo="skip"))
         fig.update_yaxes(tickvals=ticks, ticktext=ticktext, title="Hora del día (HH:MM)")
-
     _responsive_bar_style(fig, len(order_axis))
     fig.update_layout(margin=dict(t=10,b=10,l=10,r=160), legend_title_text="Hito")
     apply_plot_theme(fig)
