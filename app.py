@@ -26,13 +26,18 @@ GITHUB_RAW_URL = "https://raw.githubusercontent.com/Juanjacd/montacargas-data/ma
 
 def load_excel_from_github_raw(raw_url: str) -> pd.DataFrame:
     """
-    Descarga el XLSX desde GitHub RAW y devuelve un DataFrame.
-    Se añade ?t=timestamp para evitar caché. No usar st.cache_data aquí.
+    Descarga el XLSX desde GitHub RAW y lo normaliza usando la misma
+    ruta de parsing de la app (load_excel), para garantizar columnas como 'Datetime'.
     """
-    url = f"{raw_url}?t={int(time.time())}"
+    url = f"{raw_url}?t={int(time.time())}"  # evita caché
     r = requests.get(url, timeout=15)
     r.raise_for_status()
-    return pd.read_excel(io.BytesIO(r.content), engine="openpyxl")
+    bytes_file = io.BytesIO(r.content)
+
+    # MUY IMPORTANTE: usamos TU parser (load_excel) para obtener las columnas esperadas
+    # Si tu hoja no es "Hoja1", cámbialo por el nombre real.
+    return load_excel(bytes_file, sheet_name="Hoja1")
+
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 
