@@ -4,7 +4,7 @@
 
 # ---------------- [S0] Imports y setup -------------------
 from cfg import APP_TITLE, APP_TAGLINE
-
+import plotly.express as px   # <-- NUEVO: el código usa 'px'
 import numpy as np
 if not hasattr(np, "bool"):
     np.bool = bool
