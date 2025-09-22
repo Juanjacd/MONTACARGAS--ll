@@ -11,12 +11,28 @@ if not hasattr(np, "bool"):
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import plotly.express as pxa
 import plotly.graph_objects as go
 import sqlite3, hashlib, re, unicodedata, os
 from datetime import time as dtime
 from typing import Optional, List
 from collections import Counter
+
+# --- NUEVO (GitHub RAW): imports y utilidades ---
+import time, io, requests  # pip install requests openpyxl
+
+# Ajusta si cambias carpeta/nombre/rama:
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/Juanjacd/montacargas-data/main/plantilla_montacargas_paraPag.xlsx"
+
+def load_excel_from_github_raw(raw_url: str) -> pd.DataFrame:
+    """
+    Descarga el XLSX desde GitHub RAW y devuelve un DataFrame.
+    Se añade ?t=timestamp para evitar caché. No usar st.cache_data aquí.
+    """
+    url = f"{raw_url}?t={int(time.time())}"
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    return pd.read_excel(io.BytesIO(r.content), engine="openpyxl")
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 
@@ -462,25 +478,38 @@ with st.sidebar:
 
 EXT_COLOR_MAP = PALETTES[st.session_state.get("pal_name", "Petróleo & Tierra")]
 
-# --- Carga de datos según modo seleccionado ---
+# --- Carga de datos (MODIFICADO): intenta GitHub RAW primero, luego tu flujo de sidebar ---
 df_new = pd.DataFrame()
-if auto_local:
-    if os.path.exists(local_path):
-        try:
-            df_new = load_excel(local_path, "Hoja1")
-        except Exception as e:
-            st.error(f"❌ No pude leer el Excel local:\n{local_path}\n\n{e}")
+
+try:
+    # 1) Siempre intentamos traer la última versión desde GitHub RAW
+    df_new = load_excel_from_github_raw(GITHUB_RAW_URL)
+    st.success("Datos cargados automáticamente desde GitHub RAW ✅")
+except Exception as e:
+    st.warning(f"No se pudo descargar desde GitHub RAW ({e}). Intentando modo del sidebar...")
+
+    # 2) Si falla RAW, usamos tu lógica de antes (local o uploader)
+    if auto_local:
+        if os.path.exists(local_path):
+            try:
+                df_new = load_excel(local_path, "Hoja1")
+            except Exception as e:
+                st.error(f"❌ No pude leer el Excel local:\n{local_path}\n\n{e}")
+                st.stop()
+        else:
+            st.error(f"❌ No encuentro el archivo local:\n{local_path}")
             st.stop()
     else:
-        st.error(f"❌ No encuentro el archivo local:\n{local_path}")
-        st.stop()
-else:
-    if up is None:
-        st.warning("Sube un Excel para empezar o activa el modo local."); st.stop()
-    try:
-        df_new = load_excel(up, hoja)
-    except Exception as e:
-        st.error(f"❌ No pude leer el Excel subido: {e}"); st.stop()
+        if up is None:
+            st.warning("Sube un Excel para empezar o activa el modo local."); st.stop()
+        try:
+            df_new = load_excel(up, hoja)
+        except Exception as e:
+            st.error(f"❌ No pude leer el Excel subido: {e}"); st.stop()
+
+# Seguridad mínima
+if df_new is None or df_new.empty:
+    st.info("No hay datos para visualizar aún."); st.stop()
 
 # --- Histórico / DB ---
 ensure_db(DB_PATH)
@@ -677,7 +706,7 @@ def view_tm_por_usuario_turno():
                              text=[f"{v:.0f}" for v in totals.values],
                              textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False))
         _responsive_bar_style(fig, len(order_axis))
-        fig.update_layout(margin=dict(t=10,b=10,l=10,r=10), legend_title_text="Ítem")
+        fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), legend_title_text="Ítem")
 
     apply_plot_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
