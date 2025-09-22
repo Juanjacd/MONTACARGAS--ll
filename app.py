@@ -4,8 +4,6 @@
 
 # ---------------- [S0] Imports y setup -------------------
 from cfg import APP_TITLE, APP_TAGLINE
-import plotly.express as px # <-- NUEVO: el código usa 'px'
-px = pxa  # <- alias para que px.funcione en todo el archivo
 
 import numpy as np
 if not hasattr(np, "bool"):
@@ -13,8 +11,12 @@ if not hasattr(np, "bool"):
 
 import streamlit as st
 import pandas as pd
+
+# Plotly: importa ambos alias y olvídate de "px = pxa"
 import plotly.express as pxa
+import plotly.express as px
 import plotly.graph_objects as go
+
 import sqlite3, hashlib, re, unicodedata, os
 from datetime import time as dtime
 from typing import Optional, List
@@ -25,6 +27,7 @@ import time, io, requests  # pip install requests openpyxl
 
 # Ajusta si cambias carpeta/nombre/rama:
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/Juanjacd/montacargas-data/main/plantilla_montacargas_paraPag.xlsx"
+
 
 def load_excel_from_github_raw(raw_url: str) -> pd.DataFrame:
     """
