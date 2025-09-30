@@ -539,7 +539,6 @@ EXT_COLOR_MAP = PALETTES[st.session_state.get("pal_name", "Petróleo & Tierra")]
 # --- Carga de datos (MODIFICADO): intenta GitHub RAW primero, luego tu flujo de sidebar ---
 df_new = pd.DataFrame()
 
-try:
     # 1) Siempre intentamos traer la última versión desde GitHub RAW
     df_new = pd.DataFrame()
 
