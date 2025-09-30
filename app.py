@@ -554,44 +554,32 @@ df = df[df["Turno"].isin(["Turno A","Turno B"])].copy()
 # ---------------- Filtros ----------------
 with st.sidebar:
     users = sorted(df["Usuario"].dropna().unique().tolist())
-    turns = ["Turno A","Turno B"]
+    turns = sorted(df["Turno"].dropna().unique().tolist())
     fmin, fmax = df["FechaOper"].min().date(), df["FechaOper"].max().date()
+
     sel_users = st.multiselect("Usuarios", users, [])
     sel_turns = st.multiselect("Turnos", turns, [])
-    sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range", format="YYYY-MM-DD")
 
-start_ts, end_ts = (
-    (pd.Timestamp(sel_range[0]), pd.Timestamp(sel_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
-    if isinstance(sel_range, (list, tuple)) and len(sel_range) == 2
-    else (pd.Timestamp(fmin), pd.Timestamp(fmax) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
-)
+    # ✅ Acepta rango o un solo día (ambos casos)
+    _val = st.date_input("Rango de fechas", (fmin, fmax), key="date_range", format="YYYY-MM-DD")
+    if isinstance(_val, (list, tuple)) and len(_val) == 2:
+        d0, d1 = _val[0], _val[1]
+    else:
+        d0 = _val
+        d1 = _val
+
+# ✅ Filtramos por FECHA (no por timestamp) para incluir todo el día
 df_pre = df.copy()
-if sel_users: df_pre = df_pre[df_pre["Usuario"].isin(sel_users)]
-if sel_turns: df_pre = df_pre[df_pre["Turno"].isin(sel_turns)]
-df_pre = df_pre[(df_pre["DatetimeOper"] >= start_ts) & (df_pre["DatetimeOper"] <= end_ts)]
+if sel_users:
+    df_pre = df_pre[df_pre["Usuario"].isin(sel_users)]
+if sel_turns:
+    df_pre = df_pre[df_pre["Turno"].isin(sel_turns)]
 
-def classify_any(row) -> Optional[str]:
-    raw = canon_item_from_text(row.get("ItemRaw"))
-    if raw: return raw
-    base = item_ext(row.get("Ubic.proced"), row.get("Ubicación de destino"))
-    return base
+# Normalizamos a fecha pura para evitar quedarnos por fuera por la hora
+d0 = pd.to_datetime(d0).date()
+d1 = pd.to_datetime(d1).date()
+df_pre = df_pre[(df_pre["FechaOper"].dt.date >= d0) & (df_pre["FechaOper"].dt.date <= d1)]
 
-if "ItemExt" not in df_pre.columns:
-    df_pre["ItemExt"] = df_pre.apply(lambda r: classify_any(r), axis=1)
-
-avail_items = [it for it in EXT_ITEMS if it in set(df_pre["ItemExt"].dropna().unique().tolist())]
-default_items = []
-with st.sidebar:
-    sel_items = st.multiselect("Ítems", avail_items, default_items, key="items_selector")
-df_f = df_pre[df_pre["ItemExt"].isin(sel_items)].copy() if sel_items else df_pre.copy()
-
-with st.sidebar:
-    st.markdown("---")
-    st.download_button("⬇️ Descargar filtrado (CSV)", data=df_f.to_csv(index=False).encode("utf-8"),
-                       file_name="filtrado_montacargas.csv", mime="text/csv")
-
-if df_f.empty:
-    st.info("No hay datos con el filtro actual."); st.stop()
 
 # =========================================================
 # [S8] Helpers visuales / KPIs
