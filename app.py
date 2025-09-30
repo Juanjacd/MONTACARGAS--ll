@@ -498,29 +498,35 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
 # =========================================================
 # [S7] Sidebar: carga + preferencias + filtros  (AUTO LOCAL + fallback uploader)
 # =========================================================
-with st.sidebar:
-    with st.expander("📥 Carga de datos", expanded=True):
-        auto_local = st.checkbox("Usar archivo local automático", value=True)
-        local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx")
-        up = None
-        hoja = "Hoja1"
-        if not auto_local:
-            up = st.file_uploader("📎 Excel (.xlsx)", type=["xlsx"])
-            if up is not None:
-                try:
-                    xls_tmp = pd.ExcelFile(up); hojas = xls_tmp.sheet_names
-                    hoja = st.selectbox("Hoja", hojas, index=hojas.index("Hoja1") if "Hoja1" in hojas else 0)
-                except Exception:
-                    hoja = st.text_input("Hoja", value="Hoja1")
-                finally:
-                    if hasattr(up, "seek"): up.seek(0)
+with st.expander("📥 Carga de datos", expanded=True):
+    # 1) Botón SIEMPRE visible para carga manual
+    up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
+    hoja_up = None
+    if up is not None:
+        try:
+            xls_tmp = pd.ExcelFile(up); hojas = xls_tmp.sheet_names
+            hoja_up = st.selectbox(
+                "Hoja (archivo subido)",
+                hojas,
+                index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
+                key="hoja_up"
+            )
+        except Exception:
+            hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
+        finally:
+            if hasattr(up, "seek"): up.seek(0)
 
-        st.caption("Histórico SQLite")
-        use_db = st.checkbox("Usar histórico", value=True)
-        DB_PATH = st.text_input("Archivo DB", value="montacargas.db")
-        col1, col2 = st.columns(2)
-        with col1: btn_clear = st.button("🧹 Limpiar histórico")
-        with col2: btn_reload = st.button("🔁 Recargar histórico")
+    # 2) Opción de ruta local automática (por si no subes archivo)
+    auto_local = st.checkbox("Usar archivo local automático", value=True)
+    local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx")
+
+    st.caption("Histórico SQLite")
+    use_db = st.checkbox("Usar histórico", value=True)
+    DB_PATH = st.text_input("Archivo DB", value="montacargas.db")
+    col1, col2 = st.columns(2)
+    with col1: btn_clear = st.button("🧹 Limpiar histórico")
+    with col2: btn_reload = st.button("🔁 Recargar histórico")
+
 
     with st.expander("⚙️ Preferencias", expanded=False):
         chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"])
@@ -535,29 +541,43 @@ df_new = pd.DataFrame()
 
 try:
     # 1) Siempre intentamos traer la última versión desde GitHub RAW
-    df_new = load_excel_from_github_raw(GITHUB_RAW_URL)
-    st.success("Datos cargados automáticamente desde GitHub RAW ✅")
-except Exception as e:
-    st.warning(f"No se pudo descargar desde GitHub RAW ({e}). Intentando modo del sidebar...")
+    df_new = pd.DataFrame()
 
-    # 2) Si falla RAW, usamos tu lógica de antes (local o uploader)
-    if auto_local:
-        if os.path.exists(local_path):
-            try:
-                df_new = load_excel(local_path, "Hoja1")
-            except Exception as e:
-                st.error(f"❌ No pude leer el Excel local:\n{local_path}\n\n{e}")
-                st.stop()
-        else:
-            st.error(f"❌ No encuentro el archivo local:\n{local_path}")
+# PRIORIDAD 1: si el usuario subió archivo, úsalo
+if 'up' in locals() and up is not None:
+    try:
+        df_new = load_excel(up, sheet_name=(hoja_up or "Hoja1"))
+        st.success("Datos cargados desde archivo subido ✅")
+    except Exception as e:
+        st.error(f"❌ No pude leer el Excel subido: {e}")
+        st.stop()
+
+# PRIORIDAD 2: si no hay subido, intenta local si está activado
+elif auto_local:
+    if os.path.exists(local_path):
+        try:
+            df_new = load_excel(local_path, "Hoja1")
+            st.success("Datos cargados desde ruta local ✅")
+        except Exception as e:
+            st.error(f"❌ No pude leer el Excel local:\n{local_path}\n\n{e}")
             st.stop()
     else:
-        if up is None:
-            st.warning("Sube un Excel para empezar o activa el modo local."); st.stop()
-        try:
-            df_new = load_excel(up, hoja)
-        except Exception as e:
-            st.error(f"❌ No pude leer el Excel subido: {e}"); st.stop()
+        st.warning(f"⚠️ No encuentro el archivo local:\n{local_path}")
+
+# PRIORIDAD 3: si nada anterior funcionó, intenta GitHub RAW
+if df_new.empty:
+    try:
+        df_new = load_excel_from_github_raw(GITHUB_RAW_URL)
+        st.success("Datos cargados automáticamente desde GitHub RAW ✅")
+    except Exception as e:
+        st.error(f"❌ No se pudo cargar datos (RAW/Local/Subido fallaron). Detalle: {e}")
+        st.stop()
+
+# Seguridad mínima
+if df_new is None or df_new.empty:
+    st.info("No hay datos para visualizar aún.")
+    st.stop()
+
 
 # Seguridad mínima
 if df_new is None or df_new.empty:
@@ -589,15 +609,29 @@ with st.sidebar:
     sel_turns = st.multiselect("Turnos", turns, [])
     sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range", format="YYYY-MM-DD")
 
-start_ts, end_ts = (
-    (pd.Timestamp(sel_range[0]), pd.Timestamp(sel_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
-    if isinstance(sel_range, (list, tuple)) and len(sel_range) == 2
-    else (pd.Timestamp(fmin), pd.Timestamp(fmax) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
-)
+# --- Rango de fechas robusto: soporta 1 día o rango ---
+if isinstance(sel_range, (list, tuple)):
+    if len(sel_range) == 2:
+        start_date, end_date = sel_range
+    elif len(sel_range) == 1:
+        start_date = end_date = sel_range[0]
+    else:
+        start_date = end_date = fmin
+else:
+    start_date = end_date = sel_range
+
+start_ts = pd.Timestamp(start_date)
+end_ts   = pd.Timestamp(end_date) + pd.Timedelta(days=1) - pd.Timedelta(milliseconds=1)
+
+# --- Aplicar filtros seleccionados ---
 df_pre = df.copy()
-if sel_users: df_pre = df_pre[df_pre["Usuario"].isin(sel_users)]
-if sel_turns: df_pre = df_pre[df_pre["Turno"].isin(sel_turns)]
+if sel_users:
+    df_pre = df_pre[df_pre["Usuario"].isin(sel_users)]
+if sel_turns:
+    df_pre = df_pre[df_pre["Turno"].isin(sel_turns)]
+
 df_pre = df_pre[(df_pre["DatetimeOper"] >= start_ts) & (df_pre["DatetimeOper"] <= end_ts)]
+
 
 
 def classify_any(row) -> Optional[str]:
