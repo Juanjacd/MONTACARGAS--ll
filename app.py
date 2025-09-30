@@ -38,9 +38,7 @@ def load_excel_from_github_raw(raw_url: str) -> pd.DataFrame:
     r = requests.get(url, timeout=15)
     r.raise_for_status()
     bytes_file = io.BytesIO(r.content)
-
     # MUY IMPORTANTE: usamos TU parser (load_excel) para obtener las columnas esperadas
-    # Si tu hoja no es "Hoja1", cámbialo por el nombre real.
     return load_excel(bytes_file, sheet_name="Hoja1")
 
 
@@ -238,7 +236,7 @@ def to_time(x):
     if isinstance(x, (int, float)) and not pd.isna(x):
         try:
             dtv = pd.to_datetime(x, unit="d", origin="1899-12-30")
-            return dtime(int(dtv.hour), int(dtv.minute), int(dtv.second))
+            return dtime(int(dtv.hour), int(dtv.minute), int(getattr(dtv, "second", 0)))
         except Exception: pass
     s = str(x).strip()
     if not s: return None
@@ -454,7 +452,7 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
     return out[["Usuario","Fecha","Hora","Time","Turno","Datetime","Orden","Ubic.proced","Ubicación de destino","ItemRaw"]]
 
 # =========================================================
-# [S7] Sidebar: carga + preferencias + filtros  (AUTO LOCAL + fallback uploader)
+# [S7] Sidebar: carga + preferencias + filtros
 # =========================================================
 with st.sidebar:
     with st.expander("📥 Carga de datos", expanded=True):
@@ -480,6 +478,9 @@ with st.sidebar:
         with col1: btn_clear = st.button("🧹 Limpiar histórico")
         with col2: btn_reload = st.button("🔁 Recargar histórico")
 
+        # 🔹 BOTÓN MANUAL SIEMPRE VISIBLE (no depende del checkbox)
+        up_fixed = st.file_uploader("📎 Cargar Excel manual (siempre disponible)", type=["xlsx"], key="uploader_fixed")
+
     with st.expander("⚙️ Preferencias", expanded=False):
         chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"])
         pal_name = st.selectbox("🎨 Paleta", list(PALETTES.keys()), index=0)
@@ -488,38 +489,50 @@ with st.sidebar:
 
 EXT_COLOR_MAP = PALETTES[st.session_state.get("pal_name", "Petróleo & Tierra")]
 
-# --- Carga de datos (MODIFICADO): intenta GitHub RAW primero, luego tu flujo de sidebar ---
+# --- Carga de datos (PRIORIDAD: uploader fijo -> RAW -> local -> (condicional) uploader) ---
 df_new = pd.DataFrame()
 
-try:
-    # 1) Siempre intentamos traer la última versión desde GitHub RAW
-    df_new = load_excel_from_github_raw(GITHUB_RAW_URL)
-    st.success("Datos cargados automáticamente desde GitHub RAW ✅")
-except Exception as e:
-    st.warning(f"No se pudo descargar desde GitHub RAW ({e}). Intentando modo del sidebar...")
+# 0) Si el usuario subió archivo en el botón fijo, usarlo de una
+if up_fixed is not None:
+    try:
+        df_new = load_excel(up_fixed, "Hoja1")
+        st.success("Datos cargados del archivo subido (botón fijo) ✅")
+    except Exception as e:
+        st.error(f"❌ No pude leer el Excel subido: {e}")
+        st.stop()
 
-    # 2) Si falla RAW, usamos tu lógica de antes (local o uploader)
-    if auto_local:
-        if os.path.exists(local_path):
-            try:
-                df_new = load_excel(local_path, "Hoja1")
-            except Exception as e:
-                st.error(f"❌ No pude leer el Excel local:\n{local_path}\n\n{e}")
-                st.stop()
-        else:
-            st.error(f"❌ No encuentro el archivo local:\n{local_path}")
-            st.stop()
-    else:
-        if up is None:
-            st.warning("Sube un Excel para empezar o activa el modo local."); st.stop()
+# 1) Si no hay archivo manual, intentamos automático desde GitHub RAW
+if df_new is None or df_new.empty:
+    try:
+        df_new = load_excel_from_github_raw(GITHUB_RAW_URL)
+        st.success("Datos cargados automáticamente desde GitHub RAW ✅")
+    except Exception as e:
+        st.warning(f"No se pudo descargar desde GitHub RAW ({e}). Probando ruta local...")
+
+# 2) Si RAW no sirvió o vino vacío, probamos local si está habilitado
+if (df_new is None or df_new.empty) and auto_local:
+    if os.path.exists(local_path):
         try:
-            df_new = load_excel(up, hoja)
+            df_new = load_excel(local_path, "Hoja1")
+            st.success("Datos cargados desde la ruta local ✅")
         except Exception as e:
-            st.error(f"❌ No pude leer el Excel subido: {e}"); st.stop()
+            st.warning(f"No se pudo leer el Excel local ({e}).")
+    else:
+        st.warning(f"No existe el archivo local:\n{local_path}")
+
+# 3) Extra (opcional): si usas el uploader condicional (cuando desmarcas auto_local) y aún no hay datos
+if (df_new is None or df_new.empty) and (up is not None):
+    try:
+        df_new = load_excel(up, hoja)
+        st.success("Datos cargados del uploader (modo manual) ✅")
+    except Exception as e:
+        st.error(f"❌ No pude leer el Excel subido: {e}")
+        st.stop()
 
 # Seguridad mínima
 if df_new is None or df_new.empty:
-    st.info("No hay datos para visualizar aún."); st.stop()
+    st.warning("No hay datos. Usa el botón 'Cargar Excel manual (siempre disponible)' o corrige RAW/local.")
+    st.stop()
 
 # --- Histórico / DB ---
 ensure_db(DB_PATH)
@@ -682,11 +695,13 @@ def view_tm_por_usuario_turno():
     chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
     if chart_is_h:
         height = max(320, 24*len(order_axis) + 110)
-        fig = px.bar(g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
-                     barmode="stack",
-                     category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-                     color_discrete_map=EXT_COLOR_MAP,
-                     custom_data=["ItemExt","Min"], height=height)
+        fig = px.bar(
+            g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
+            barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt","Min"], height=height
+        )
         fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
         fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=12))
 
@@ -701,10 +716,12 @@ def view_tm_por_usuario_turno():
         fig.update_layout(margin=dict(t=10,b=10,l=10,r=110), legend_title_text="Ítem")
     else:
         height = max(420, 24*len(order_axis) + 60)
-        fig = px.bar(g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
-                     category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-                     color_discrete_map=EXT_COLOR_MAP,
-                     custom_data=["ItemExt","Min"], height=height)
+        fig = px.bar(
+            g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt","Min"], height=height
+        )
         fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
         tick_angle = -65 if len(order_axis) > 8 else -30
         fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
