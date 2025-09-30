@@ -323,75 +323,99 @@ def item_ext(ubic_proced: str, ubic_dest: str) -> Optional[str]:
     return None
 
 # =========================================================
-# [S4] SQLite (persistencia)
+# =========================================================
+# =========================================================
+# [S4] SQLite (persistencia) — migración + inserción segura
 # =========================================================
 TABLE = "ordenes"
-def ensure_db(path):
-    con = sqlite3.connect(path); cur = con.cursor()
-    cur.execute(f"""
-        CREATE TABLE IF NOT EXISTS {TABLE}(
-            id TEXT PRIMARY KEY,
-            usuario TEXT, fecha TEXT, time TEXT, turno TEXT, datetime TEXT,
-            orden TEXT, ubic_proced TEXT, ubic_destino TEXT, itemraw TEXT
-        )
-    """)
-    cur.execute(f"PRAGMA table_info({TABLE})")
-    existing_cols = {row[1].lower() for row in cur.fetchall()}
-    required = ["id","usuario","fecha","time","turno","datetime","orden","ubic_proced","ubic_destino","itemraw"]
-    for col in required:
-        if col not in existing_cols:
-            cur.execute(f"ALTER TABLE {TABLE} ADD COLUMN {col} TEXT")
-    con.commit(); con.close()
 
-def make_uid(row):
-    dtv = pd.to_datetime(row.get("Datetime"), errors="coerce")
-    dtv = pd.NaT if pd.isna(dtv) else dtv.floor("min")
-    base = f"{row.get('Usuario','')}|{row.get('Fecha','')}|{str(dtv)}|{str(row.get('Orden') or '')}"
-    return hashlib.sha1(base.encode("utf-8")).hexdigest()
+def ensure_db(path: str):
+    """
+    Crea o migra la tabla 'ordenes' con las columnas usadas por la app.
+    No borra datos, solo agrega columnas que falten.
+    """
+    con = sqlite3.connect(path, timeout=30)
+    cur = con.cursor()
+    try:
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TABLE}(
+                id TEXT PRIMARY KEY,
+                usuario TEXT,
+                fecha TEXT,
+                time TEXT,
+                turno TEXT,
+                datetime TEXT,
+                orden TEXT,
+                ubic_proced TEXT,
+                ubic_destino TEXT,
+                itemraw TEXT
+            )
+        """)
+
+        # Revisa columnas existentes
+        cur.execute(f"PRAGMA table_info({TABLE})")
+        existing = {row[1].lower() for row in cur.fetchall()}
+
+        required = [
+            "id","usuario","fecha","time","turno","datetime",
+            "orden","ubic_proced","ubic_destino","itemraw"
+        ]
+        for col in required:
+            if col not in existing:
+                cur.execute(f"ALTER TABLE {TABLE} ADD COLUMN {col} TEXT")
+
+        # Menos bloqueos
+        cur.execute("PRAGMA journal_mode=WAL;")
+        cur.execute("PRAGMA synchronous=NORMAL;")
+        con.commit()
+    finally:
+        con.close()
+
 
 def upsert_df(path, df):
-    if df.empty: return 0
-    con = sqlite3.connect(path); cur = con.cursor()
-    df2 = df.copy(); df2["Datetime"] = pd.to_datetime(df2["Datetime"]).dt.floor("min")
-    df2["id"] = df2.apply(make_uid, axis=1)
-    rows = []
-    for _, r in df2.iterrows():
-        rows.append((r["id"], r.get("Usuario"),
-                     str(r.get("Fecha")) if pd.notnull(r.get("Fecha")) else None,
-                     str(r.get("Time")) if pd.notnull(r.get("Time")) else None,
-                     r.get("Turno"),
-                     r.get("Datetime").isoformat() if pd.notnull(r["Datetime"]) else None,
-                     str(r.get("Orden") or None),
-                     r.get("Ubic.proced"), r.get("Ubicación de destino"),
-                     r.get("ItemRaw") if "ItemRaw" in df2.columns else None))
-    cur.executemany(
-        f"""INSERT OR REPLACE INTO {TABLE}
-            (id,usuario,fecha,time,turno,datetime,orden,ubic_proced,ubic_destino,itemraw)
-            VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        rows
-    )
-    con.commit(); con.close()
-    return len(rows)
+    """
+    Inserta o reemplaza registros en la tabla 'ordenes' usando la clave 'id'.
+    Evita errores por columnas faltantes o bloqueos.
+    """
+    if df.empty:
+        return 0
 
-def read_all(path) -> pd.DataFrame:
-    con = sqlite3.connect(path)
+    con = sqlite3.connect(path, timeout=30)
+    cur = con.cursor()
     try:
-        df = pd.read_sql_query(f"SELECT * FROM {TABLE}", con)
-    except Exception:
-        df = pd.DataFrame(columns=["id","usuario","fecha","time","turno","datetime","orden","ubic_proced","ubic_destino","itemraw"])
-    con.close()
-    if df.empty: return df
-    df.rename(columns={"usuario":"Usuario","fecha":"Fecha","time":"TimeStr",
-                       "turno":"Turno","datetime":"Datetime","orden":"Orden",
-                       "ubic_proced":"Ubic.proced","ubic_destino":"Ubicación de destino",
-                       "itemraw":"ItemRaw"}, inplace=True)
-    df["Datetime"] = pd.to_datetime(df["Datetime"], errors="coerce")
-    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", dayfirst=True).dt.date
-    df["Time"] = df["Datetime"].dt.time
-    return df
+        cur.execute("PRAGMA journal_mode=WAL;")
+        cur.execute("PRAGMA synchronous=NORMAL;")
 
-def clear_db(path):
-    con = sqlite3.connect(path); con.execute(f"DELETE FROM {TABLE}"); con.commit(); con.close()
+        df2 = df.copy()
+        df2["Datetime"] = pd.to_datetime(df2["Datetime"]).dt.floor("min")
+        df2["id"] = df2.apply(make_uid, axis=1)
+
+        rows = []
+        for _, r in df2.iterrows():
+            rows.append((
+                r["id"],
+                r.get("Usuario"),
+                str(r.get("Fecha")) if pd.notnull(r.get("Fecha")) else None,
+                str(r.get("Time")) if pd.notnull(r.get("Time")) else None,
+                r.get("Turno"),
+                r.get("Datetime").isoformat() if pd.notnull(r["Datetime"]) else None,
+                str(r.get("Orden") or None),
+                r.get("Ubic.proced"),
+                r.get("Ubicación de destino"),
+                r.get("ItemRaw") if "ItemRaw" in df2.columns else None
+            ))
+
+        cur.executemany(
+            f"""INSERT OR REPLACE INTO {TABLE}
+                (id,usuario,fecha,time,turno,datetime,orden,ubic_proced,ubic_destino,itemraw)
+                VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            rows
+        )
+        con.commit()
+        return len(rows)
+    finally:
+        con.close()
+
 
 # =========================================================
 # [S5] Fecha operativa + marca de horas extra
