@@ -540,7 +540,7 @@ EXT_COLOR_MAP = PALETTES[st.session_state.get("pal_name", "Petróleo & Tierra")]
 df_new = pd.DataFrame()
 
     # 1) Siempre intentamos traer la última versión desde GitHub RAW
-    df_new = pd.DataFrame()
+df_new = pd.DataFrame()
 
 # PRIORIDAD 1: si el usuario subió archivo, úsalo
 if 'up' in locals() and up is not None:
