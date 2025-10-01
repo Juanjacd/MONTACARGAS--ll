@@ -514,7 +514,8 @@ with st.expander("📥 Carga de datos", expanded=True):
         except Exception:
             hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
         finally:A
-            if hasattr(up, "seek"): up.seek(0)
+        if hasattr(up, "seek"):
+                up.seek(0)
 
     # 2) Opción de ruta local automática (por si no subes archivo)
 auto_local = st.checkbox("Usar archivo local automático", value=True)
