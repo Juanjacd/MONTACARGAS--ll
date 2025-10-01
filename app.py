@@ -636,10 +636,10 @@ with st.sidebar:
 
     fmin, fmax = df["FechaOper"].min().date(), df["FechaOper"].max().date()
 
-    sel_users = st.multiselect("Usuarios", users, [])
-    sel_turns = st.multiselect("Turnos", turns, [])
-    sel_range = st.date_input("Rango de fechas", (fmin, fmax),
-                              key="date_range", format="YYYY-MM-DD")
+    sel_users = st.multiselect("Usuarios", users, [], key="users_selector")
+    sel_turns = st.multiselect("Turnos", turns, [], key="turns_selector")
+    sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range_filter", format="YYYY-MM-DD")
+
 
 # --- Rango de fechas robusto (1 día o rango) ---
 if isinstance(sel_range, (list, tuple)):
