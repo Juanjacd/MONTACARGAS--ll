@@ -513,7 +513,7 @@ with st.expander("📥 Carga de datos", expanded=True):
             )
         except Exception:
             hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
-        finally:
+        finally:A
             if hasattr(up, "seek"): up.seek(0)
 
     # 2) Opción de ruta local automática (por si no subes archivo)
@@ -624,41 +624,63 @@ else:
 start_ts = pd.Timestamp(start_date)
 end_ts   = pd.Timestamp(end_date) + pd.Timedelta(days=1) - pd.Timedelta(milliseconds=1)
 
-# --- Aplicar filtros seleccionados ---
+# ---------------- Filtros ----------------
+with st.sidebar:
+    users = sorted(df["Usuario"].dropna().unique().tolist())
+    turns = ["Turno A", "Turno B"]
+
+    # Asegura que FechaOper sea date para el rango inicial
+    if not pd.api.types.is_datetime64_any_dtype(df["FechaOper"]):
+        df["FechaOper"] = pd.to_datetime(df["FechaOper"], errors="coerce")
+
+    fmin, fmax = df["FechaOper"].min().date(), df["FechaOper"].max().date()
+
+    sel_users = st.multiselect("Usuarios", users, [])
+    sel_turns = st.multiselect("Turnos", turns, [])
+    sel_range = st.date_input("Rango de fechas", (fmin, fmax),
+                              key="date_range", format="YYYY-MM-DD")
+
+# --- Rango de fechas robusto (1 día o rango) ---
+if isinstance(sel_range, (list, tuple)):
+    if len(sel_range) == 2:
+        start_date, end_date = sel_range
+    elif len(sel_range) == 1:
+        start_date = end_date = sel_range[0]
+    else:
+        start_date = end_date = fmin
+else:
+    start_date = end_date = sel_range
+
+# --- Copia para filtrar ---
 df_pre = df.copy()
+
+# --- Normalizar DatetimeOper (para evitar falsos vacíos) ---
+def _parse_dt(series: pd.Series) -> pd.Series:
+    dt = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
+    miss = dt.isna()
+    if miss.any():
+        dt2 = pd.to_datetime(series[miss], errors="coerce", dayfirst=True)
+        dt.loc[miss] = dt2
+    return dt
+
+if "DatetimeOper" in df_pre.columns:
+    df_pre["DatetimeOper"] = _parse_dt(df_pre["DatetimeOper"])
+else:
+    st.error("No encuentro la columna 'DatetimeOper' para filtrar."); st.stop()
+
+# --- Filtros opcionales por usuario/turno ---
 if sel_users:
     df_pre = df_pre[df_pre["Usuario"].isin(sel_users)]
 if sel_turns:
     df_pre = df_pre[df_pre["Turno"].isin(sel_turns)]
 
-df_pre = df_pre[(df_pre["DatetimeOper"] >= start_ts) & (df_pre["DatetimeOper"] <= end_ts)]
+# --- Filtro por fecha IGNORANDO horas ---
+mask_date = (
+    (df_pre["DatetimeOper"].dt.date >= start_date) &
+    (df_pre["DatetimeOper"].dt.date <= end_date)
+)
+df_pre = df_pre.loc[mask_date].copy()
 
-
-
-def classify_any(row) -> Optional[str]:
-    raw = canon_item_from_text(row.get("ItemRaw"))
-    if raw: return raw
-    base = item_ext(row.get("Ubic.proced"), row.get("Ubicación de destino"))
-    return base
-
-
-if "ItemExt" not in df_pre.columns:
-    df_pre["ItemExt"] = df_pre.apply(lambda r: classify_any(r), axis=1)
-
-avail_items = [it for it in EXT_ITEMS if it in set(df_pre["ItemExt"].dropna().unique().tolist())]
-default_items = []
-with st.sidebar:
-    sel_items = st.multiselect("Ítems", avail_items, default_items, key="items_selector")
-
-df_f = df_pre[df_pre["ItemExt"].isin(sel_items)].copy() if sel_items else df_pre.copy()
-
-with st.sidebar:
-    st.markdown("---")
-    st.download_button("⬇️ Descargar filtrado (CSV)", data=df_f.to_csv(index=False).encode("utf-8"),
-                       file_name="filtrado_montacargas.csv", mime="text/csv")
-
-if df_f.empty:
-    st.info("No hay datos con el filtro actual."); st.stop()
 
 # =========================================================
 # [S8] Helpers visuales / KPIs
