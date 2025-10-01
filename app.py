@@ -517,30 +517,32 @@ with st.expander("📥 Carga de datos", expanded=True):
             if hasattr(up, "seek"): up.seek(0)
 
     # 2) Opción de ruta local automática (por si no subes archivo)
-    auto_local = st.checkbox("Usar archivo local automático", value=True)
-    local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx")
+auto_local = st.checkbox("Usar archivo local automático", value=True)
+local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx")
 
-    st.caption("Histórico SQLite")
-    use_db = st.checkbox("Usar histórico", value=True)
-    DB_PATH = st.text_input("Archivo DB", value="montacargas.db")
-    col1, col2 = st.columns(2)
-    with col1: btn_clear = st.button("🧹 Limpiar histórico")
-    with col2: btn_reload = st.button("🔁 Recargar histórico")
+st.caption("Histórico SQLite")
+use_db = st.checkbox("Usar histórico", value=True)
+DB_PATH = st.text_input("Archivo DB", value="montacargas.db")
+col1, col2 = st.columns(2)
+with col1:
+    btn_clear = st.button("🧹 Limpiar histórico")
+with col2:
+    btn_reload = st.button("🔁 Recargar histórico")
 
+# ✅ El expander va a nivel superior (no dentro de forms)
+with st.expander("⚙️ Preferencias", expanded=False):
+    chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"])
+    pal_name = st.selectbox("🎨 Paleta", list(PALETTES.keys()), index=0)
+    st.session_state["pal_name"] = pal_name
+    st.session_state["chart_type"] = chart_type
 
-    with st.expander("⚙️ Preferencias", expanded=False):
-        chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"])
-        pal_name = st.selectbox("🎨 Paleta", list(PALETTES.keys()), index=0)
-        st.session_state["pal_name"] = pal_name
-        st.session_state["chart_type"] = chart_type
-
-EXT_COLOR_MAP = PALETTES[st.session_state.get("pal_name", "Petróleo & Tierra")]
+# ✅ Paleta segura (evita KeyError si el nombre por defecto no existe)
+_default_palette = next(iter(PALETTES))  # primera clave disponible
+pal_key = st.session_state.get("pal_name", _default_palette)
+EXT_COLOR_MAP = PALETTES.get(pal_key, PALETTES[_default_palette])
 
 # --- Carga de datos (MODIFICADO): intenta GitHub RAW primero, luego tu flujo de sidebar ---
-df_new = pd.DataFrame()
-
-    # 1) Siempre intentamos traer la última versión desde GitHub RAW
-df_new = pd.DataFrame()
+df_new = pd.DataFrame()  # ✅ una sola vez
 
 # PRIORIDAD 1: si el usuario subió archivo, úsalo
 if 'up' in locals() and up is not None:
