@@ -995,14 +995,21 @@ def view_ordenes_ot():
                 ))
             prev = list(fig.layout.annotations) if fig.layout.annotations else []
             fig.update_layout(annotations=prev + annotations)
-        _responsive_bar_style(fig, n_bars)
-        fig.update_layout(
-            margin=dict(t=10, b=60, l=10, r=10),
-            legend_title_text="Ítem",
-            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+    _responsive_bar_style(fig, n_bars)
+    fig.update_layout(
+        margin=dict(t=10, b=60, l=10, r=10),
+        legend_title_text="Ítem",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.22,
+            xanchor="center",
+            x=0.5
         )
-    # === BLOQUE BARRA VERTICAL ===
+    )
+
 else:
+    # === BLOQUE BARRA VERTICAL ===
     height = max(420, 24*len(order_axis) + 60)
     fig = px.bar(
         g,
@@ -1067,6 +1074,7 @@ else:
 
 apply_plot_theme(fig)
 st.plotly_chart(fig, use_container_width=True)
+
 
 # =========================================================
 # [S10] Vista 2 — Órdenes OT por usuario/turno
