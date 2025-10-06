@@ -1,5 +1,9 @@
+# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+# =========================================================
 # DASHBOARD MONTACARGAS — TM + Órdenes OT + Inicio/Fin (auto horas extra)
 # =========================================================
+
 
 # ---------------- [S0] Imports y setup -------------------
 from cfg import APP_TITLE, APP_TAGLINE
