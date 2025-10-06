@@ -613,44 +613,35 @@ if not df_new.empty:
 df = read_all(DB_PATH)
 
 
-# ---------------- Filtros ----------------
+# ---------------- Filtros (único y seguro) ----------------
 with st.sidebar:
-    users = sorted(df["Usuario"].dropna().unique().tolist())
-    turns = ["Turno A","Turno B"]
-    fmin, fmax = df["FechaOper"].min().date(), df["FechaOper"].max().date()
-    sel_users = st.multiselect("Usuarios", users, [])
-    sel_turns = st.multiselect("Turnos", turns, [])
-    sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range", format="YYYY-MM-DD")
+    # Asegura columnas operativas antes de usarlas
+    if ("FechaOper" not in df.columns) or ("DatetimeOper" not in df.columns):
+        df = apply_oper_day(df)
 
-# --- Rango de fechas robusto: soporta 1 día o rango ---
-if isinstance(sel_range, (list, tuple)):
-    if len(sel_range) == 2:
-        start_date, end_date = sel_range
-    elif len(sel_range) == 1:
-        start_date = end_date = sel_range[0]
-    else:
-        start_date = end_date = fmin
-else:
-    start_date = end_date = sel_range
+    # Normaliza tipo para evitar .date() sobre strings
+    df["FechaOper"] = pd.to_datetime(df["FechaOper"], errors="coerce")
 
-start_ts = pd.Timestamp(start_date)
-end_ts   = pd.Timestamp(end_date) + pd.Timedelta(days=1) - pd.Timedelta(milliseconds=1)
-
-# ---------------- Filtros ----------------
-with st.sidebar:
+    # Listas de selección
     users = sorted(df["Usuario"].dropna().unique().tolist())
     turns = ["Turno A", "Turno B"]
 
-    # Asegura que FechaOper sea date para el rango inicial
-    if not pd.api.types.is_datetime64_any_dtype(df["FechaOper"]):
-        df["FechaOper"] = pd.to_datetime(df["FechaOper"], errors="coerce")
-
-    fmin, fmax = df["FechaOper"].min().date(), df["FechaOper"].max().date()
+    # Rango seguro aunque todo sea NaT
+    if df["FechaOper"].notna().any():
+        fmin = df["FechaOper"].min().date()
+        fmax = df["FechaOper"].max().date()
+    else:
+        _hoy = pd.Timestamp.today().date()
+        fmin = fmax = _hoy
 
     sel_users = st.multiselect("Usuarios", users, [], key="users_selector")
     sel_turns = st.multiselect("Turnos", turns, [], key="turns_selector")
-    sel_range = st.date_input("Rango de fechas", (fmin, fmax), key="date_range_filter", format="YYYY-MM-DD")
-
+    sel_range = st.date_input(
+        "Rango de fechas",
+        (fmin, fmax),
+        key="date_range_filter",
+        format="YYYY-MM-DD"
+    )
 
 # --- Rango de fechas robusto (1 día o rango) ---
 if isinstance(sel_range, (list, tuple)):
@@ -665,6 +656,7 @@ else:
 
 # --- Copia para filtrar ---
 df_pre = df.copy()
+
 
 # --- Normalizar DatetimeOper (para evitar falsos vacíos) ---
 def _parse_dt(series: pd.Series) -> pd.Series:
