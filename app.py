@@ -826,6 +826,9 @@ chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra h
 
 if chart_is_h:
     # --- BARRA HORIZONTAL ---
+   
+if chart_is_h:
+    # --- BARRA HORIZONTAL ---
     height = max(320, 24*len(order_axis) + 110)
     fig = px.bar(
         g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
@@ -853,6 +856,7 @@ if chart_is_h:
         legend_title_text="Ítem",
         legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
     )
+
 else:
     # --- BARRA VERTICAL ---
     height = max(420, 24*len(order_axis) + 60)
