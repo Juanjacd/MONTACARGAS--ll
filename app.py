@@ -681,6 +681,9 @@ mask_date = (
     (df_pre["DatetimeOper"].dt.date <= end_date)
 )
 df_pre = df_pre.loc[mask_date].copy()
+# --- PUBLICA df_pre como df_f para las vistas (evita NameError) ---
+df_f = df_pre.copy()
+st.session_state['df_f'] = df_f
 
 
 # =========================================================
