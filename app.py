@@ -727,6 +727,20 @@ def render_kpis(df_filtered: pd.DataFrame):
 def view_tm_por_usuario_turno():
     render_section_title("Tiempo Muerto — dos barras por Usuario (Turno A y B), apilado por ítem")
     dtmp = df_f.copy()
+        # --- BLINDAJE: garantizar ItemExt y listas de ítems ---
+    if "ItemExt" not in dtmp.columns:
+        # Clasificación mínima: primero por texto, si no, por origen/destino, si no, '—'
+        dtmp["ItemExt"] = dtmp.apply(
+            lambda r: (canon_item_from_text(r.get("ItemRaw"))
+                       or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
+                       or "—"),
+            axis=1
+        )
+
+    avail_items = sorted([x for x in dtmp["ItemExt"].dropna().unique().tolist()])
+    # Si en algún momento decides poner un selector en sidebar, podrías guardar en session_state['sel_items'].
+    sel_items = st.session_state.get("sel_items", [])
+
     df_g = dtmp.sort_values(["Usuario","DatetimeOper"]).copy()
     df_g["prev_dt"] = df_g.groupby("Usuario")["DatetimeOper"].shift(1)
     df_g["prev_fecha"] = df_g.groupby("Usuario")["FechaOper"].shift(1)
@@ -836,6 +850,24 @@ def view_tm_por_usuario_turno():
 # =========================================================
 def view_ordenes_ot():
     render_section_title("Órdenes OT — total de movimientos por usuario y turno")
+        # --- BLINDAJE: garantizar ItemExt y listas de ítems ---
+    if "ItemExt" not in df_f.columns:
+        df_aux = df_f.copy()
+        df_aux["ItemExt"] = df_aux.apply(
+            lambda r: (canon_item_from_text(r.get("ItemRaw"))
+                       or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
+                       or "—"),
+            axis=1
+        )
+    else:
+        df_aux = df_f
+
+    avail_items = sorted([x for x in df_aux["ItemExt"].dropna().unique().tolist()])
+    sel_items = st.session_state.get("sel_items", [])
+
+    # A partir de aquí usa df_aux en lugar de df_f para la agregación
+    cnt = (df_aux.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
+
     cnt = (df_f.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
     if cnt.empty:
         st.info("No hay órdenes en el filtro actual para 'Órdenes OT'."); return
