@@ -490,81 +490,63 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
 with st.sidebar:
     panel = st.container()
 
-    with panel.expander("📥 Carga de datos", expanded=True):
-        # --- Wrapper para limitar el CSS a este uploader ---
-        st.markdown('<div id="uploader-excel">', unsafe_allow_html=True)
+with panel.expander("📥 Carga de datos", expanded=True):
+    # --- Wrapper para encerrar el uploader ---
+    st.markdown('<div id="uploader-excel">', unsafe_allow_html=True)
 
-        up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
-        hoja_up = None
-        if up is not None:
-            try:
-                xls_tmp = pd.ExcelFile(up)
-                hojas = xls_tmp.sheet_names
-                hoja_up = st.selectbox(
-                    "Hoja (archivo subido)",
-                    hojas,
-                    index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
-                    key="hoja_up"
-                )
-            except Exception:
-                hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
-            finally:
-                if hasattr(up, "seek"):
-                    up.seek(0)
+    up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
+    hoja_up = None
+    if up is not None:
+        try:
+            xls_tmp = pd.ExcelFile(up)
+            hojas = xls_tmp.sheet_names
+            hoja_up = st.selectbox(
+                "Hoja (archivo subido)",
+                hojas,
+                index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
+                key="hoja_up"
+            )
+        except Exception:
+            hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
+        finally:
+            if hasattr(up, "seek"):
+                up.seek(0)
 
-        # ✅ ESTE BLOQUE VA DENTRO DEL EXPANDER, NO AFUERA
-        auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
-        local_path = st.text_input(
+    # ✅ ESTAS LÍNEAS DEBEN IR AQUÍ, CON ESTA SANGRÍA
+    auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
+    local_path = st.text_input(
         "Ruta del Excel",
         value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx",
-        key="ruta_excel_ui"
-        )
+        key="ruta_excel"
+    )
 
-        # --- CSS robusto para cambiar el texto del botón del uploader ---
-st.markdown("""
-<style>
-/* Asegura posición relativa para poder escribir el ::after */
-#uploader-excel [data-testid="stFileUploader"] button,
-#uploader-excel [data-testid="stFileUploader"] label {
-  position: relative !important;
-}
+    # ✅ CSS DEL BOTÓN (alineado al mismo nivel)
+    st.markdown("""
+    <style>
+    #uploader-excel [data-testid="stFileUploader"] button,
+    #uploader-excel [data-testid="stFileUploader"] label {
+      position: relative !important;
+    }
+    #uploader-excel [data-testid="stFileUploader"] button span,
+    #uploader-excel [data-testid="stFileUploader"] button p,
+    #uploader-excel [data-testid="stFileUploader"] label span,
+    #uploader-excel [data-testid="stFileUploader"] label p {
+      opacity: 0 !important;
+    }
+    #uploader-excel [data-testid="stFileUploader"] button::after,
+    #uploader-excel [data-testid="stFileUploader"] label::after {
+      content: "Subir Excel";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-/* Oculta el texto original del botón (puede ser span o p) */
-#uploader-excel [data-testid="stFileUploader"] button span,
-#uploader-excel [data-testid="stFileUploader"] button p,
-#uploader-excel [data-testid="stFileUploader"] label span,
-#uploader-excel [data-testid="stFileUploader"] label p {
-  opacity: 0 !important;
-}
-
-/* Pone el texto nuevo encima del botón */
-#uploader-excel [data-testid="stFileUploader"] button::after,
-#uploader-excel [data-testid="stFileUploader"] label::after {
-  content: "Subir Excel";
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-}
-
-/* (Opcional) Cambiar el texto de arrastrar archivo */
-#uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div > span,
-#uploader-excel [data-testid="stFileUploaderDropzoneInstructions"] > div > span {
-  opacity: 0 !important;
-}
-#uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div::after,
-#uploader-excel [data-testid="stFileUploaderDropzoneInstructions"] > div::after {
-  content: "o arrastra aquí el archivo .xlsx";
-  display: inline-block;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-
+    st.markdown('</div>', unsafe_allow_html=True)
 
  # 2) Opción de ruta local automática
  local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx", key="ruta_excel")
