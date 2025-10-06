@@ -495,6 +495,24 @@ with panel.expander("📥 Carga de datos", expanded=True):
     st.markdown('<div id="uploader-excel">', unsafe_allow_html=True)
 
     up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
+    
+    # ✅ BLOQUE que cambia el texto del botón a "Subir Excel"
+    import streamlit.components.v1 as components
+    components.html("""
+    <script>
+    (function(){
+      const sel = '#uploader-excel [data-testid="stFileUploader"] button, #uploader-excel [data-testid="stFileUploader"] label';
+      function rename(){
+        const el = parent.document.querySelector(sel);
+        if (el) { el.textContent = 'Subir Excel'; return true; }
+        return false;
+      }
+      let tries = 0;
+      const t = setInterval(()=>{ if(rename() || ++tries>20) clearInterval(t); }, 200);
+    })();
+    </script>
+    """, height=0)
+
     hoja_up = None
     if up is not None:
         try:
@@ -512,7 +530,6 @@ with panel.expander("📥 Carga de datos", expanded=True):
             if hasattr(up, "seek"):
                 up.seek(0)
 
-    # ✅ ESTAS LÍNEAS DEBEN IR AQUÍ, CON ESTA SANGRÍA
     auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
     local_path = st.text_input(
         "Ruta del Excel",
@@ -520,36 +537,11 @@ with panel.expander("📥 Carga de datos", expanded=True):
         key="ruta_excel"
     )
 
-    # ✅ CSS DEL BOTÓN (alineado al mismo nivel)
-    st.markdown("""
-    <style>
-    #uploader-excel [data-testid="stFileUploader"] button,
-    #uploader-excel [data-testid="stFileUploader"] label {
-      position: relative !important;
-    }
-    #uploader-excel [data-testid="stFileUploader"] button span,
-    #uploader-excel [data-testid="stFileUploader"] button p,
-    #uploader-excel [data-testid="stFileUploader"] label span,
-    #uploader-excel [data-testid="stFileUploader"] label p {
-      opacity: 0 !important;
-    }
-    #uploader-excel [data-testid="stFileUploader"] button::after,
-    #uploader-excel [data-testid="stFileUploader"] label::after {
-      content: "Subir Excel";
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.caption("Histórico SQLite")
     DB_PATH = st.text_input("Archivo DB", value="montacargas.db", key="db_path")
+
 
 
     # (Opcional) mover también Preferencias al mismo panel:
