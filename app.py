@@ -548,9 +548,6 @@ with panel.expander("📥 Carga de datos", expanded=True):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
- # 2) Opción de ruta local automática
- local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx", key="ruta_excel")
-
     st.caption("Histórico SQLite")
     DB_PATH = st.text_input("Archivo DB", value="montacargas.db", key="db_path")
 
