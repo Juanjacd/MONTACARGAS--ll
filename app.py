@@ -142,19 +142,21 @@ st.markdown(BASE_STYLE, unsafe_allow_html=True)
 with st.sidebar:
     st.markdown("---")
 
+# === [Paso 1] Tema claro + leyenda abajo (mejor en celular) ===
 def apply_plot_theme(fig):
-    # Siempre tema claro
+    """Tema claro y leyenda horizontal centrada abajo para que no robe ancho en móvil."""
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="#ffffff",
         plot_bgcolor="#ffffff",
         font=dict(color="#0f172a"),
         legend=dict(
-            orientation="v",
-            yanchor="top", y=1,
-            xanchor="left", x=1.02,
+            orientation="h",          # horizontal
+            yanchor="top", y=-0.20,   # debajo del gráfico
+            xanchor="center", x=0.5,  # centrada
             bgcolor="rgba(0,0,0,0)"
         ),
+        legend_title_text=None,
         showlegend=True,
         hoverlabel=dict(font_size=12)
     )
@@ -968,12 +970,167 @@ def view_ordenes_ot():
             prev = list(fig.layout.annotations) if fig.layout.annotations else []
             fig.update_layout(annotations=prev + annotations)
         _responsive_bar_style(fig, n_bars)
-        fig.update_layout(margin=dict(t=50, b=10, l=10, r=100), legend_title_text="Ítem")
+                fig.update_layout(
+            margin=dict(t=10, b=60, l=10, r=10),
+            legend_title_text="Ítem",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+        )
+    else:
+        height = max(420, 24*len(order_axis) + 60)
+        fig = px.bar(
+            g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt","Min"], height=height
+        )
+        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
+        tick_angle = -65 if len(order_axis) > 8 else -30
+        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
+        totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
+        ymax = float(totals.max())*1.18
+        fig.update_yaxes(range=[0, ymax])
+        fig.add_trace(go.Bar(
+            x=totals.index.tolist(), y=totals.values,
+            marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
+            text=[f"{v:.0f}" for v in totals.values],
+            textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False
+        ))
+        _responsive_bar_style(fig, len(order_axis))
+        fig.update_layout(
+            margin=dict(t=10, b=60, l=10, r=10),
+            legend_title_text="Ítem",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+        )
+
+    apply_plot_theme(fig)
+    st.plotly_chart(fig, use_container_width=True)
+
+# =========================================================
+# [S10] Vista 2 — Órdenes OT por usuario/turno
+# =========================================================
+def view_ordenes_ot():
+    render_section_title("Órdenes OT — total de movimientos por usuario y turno")
+
+    # --- BLOQUE NUEVO (BLINDAJE) ---
+    d = df_f.copy() if 'df_f' in globals() else pd.DataFrame()
+    if d is None or d.empty:
+        st.info("No hay datos para 'Órdenes OT' con el filtro actual.")
+        return
+
+    for _col in ("Usuario", "Turno"):
+        if _col not in d.columns:
+            st.warning(f"Falta columna requerida: '{_col}'.")
+            return
+
+    if "ItemExt" not in d.columns:
+        d["ItemExt"] = d.apply(
+            lambda r: (
+                canon_item_from_text(r.get("ItemRaw"))
+                or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
+                or "—"
+            ),
+            axis=1
+        )
+
+    avail_items = sorted([x for x in d["ItemExt"].dropna().unique().tolist()])
+    sel_items = st.session_state.get("sel_items", [])
+    if sel_items:
+        d = d[d["ItemExt"].isin(sel_items)]
+        if d.empty:
+            st.info("Sin registros para los ítems seleccionados.")
+            return
+
+    cnt = (
+        d.groupby(["Usuario", "Turno", "ItemExt"])
+         .size()
+         .reset_index(name="CNT")
+    )
+    if cnt.empty:
+        st.info("No hay órdenes en el filtro actual para 'Órdenes OT'.")
+        return
+
+    # 🔹 A PARTIR DE AQUÍ SIGUE TU CÓDIGO ORIGINAL (ajustando leyenda y márgenes)
+    cnt["TurnoAB"] = cnt["Turno"].str.replace("Turno ", "", regex=False)
+    cnt["UsuarioTurnoShort"] = cnt.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
+    order_users = (cnt.groupby("Usuario")["CNT"].sum().sort_values(ascending=False).index.tolist())
+    order_axis, present_keys = [], set(cnt["UsuarioTurnoShort"])
+    for u in order_users:
+        for ab in ["A", "B"]:
+            k = _short_label(u, ab)
+            if k in present_keys:
+                order_axis.append(k)
+
+    n_bars = len(order_axis)
+    show_totals = n_bars <= 12
+    tick_angle = -65 if n_bars > 8 else -30
+
+    if n_bars > 14:
+        hover_tmpl_h = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
+        height = max(440, 22*n_bars + 120)
+        fig = px.bar(
+            cnt, y="UsuarioTurnoShort", x="CNT", color="ItemExt", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt", "CNT", "UsuarioTurnoShort"], height=height, orientation="h"
+        )
+        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
+        totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
+        fig.add_trace(go.Scatter(
+            x=totals.values, y=totals.index.tolist(), mode="text",
+            text=[f"{int(v):,}".replace(",", ".") for v in totals.values],
+            textposition="middle right", textfont=dict(size=11, color=ANN_COL),
+            showlegend=False, hoverinfo="skip"
+        ))
+        xmax = max(1, float(totals.max()))
+        fig.update_xaxes(range=[0, xmax*1.08])
+        _responsive_bar_style(fig, n_bars)
+        fig.update_layout(
+            margin=dict(t=40, b=70, l=10, r=10),
+            legend_title_text="Ítem",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+        )
+    else:
+        hover_tmpl = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
+        height = max(520, 26*n_bars + 100)
+        fig = px.bar(
+            cnt, x="UsuarioTurnoShort", y="CNT", color="ItemExt", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt", "CNT", "UsuarioTurnoShort"], height=height
+        )
+        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, cliponaxis=False)
+        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
+        totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
+        max_digits = len(str(int(totals.max()))) if len(totals) else 1
+        lab_size = max(10, min(14, 15 - max(0, max_digits - 3)))
+        pad_frac = 0.16 + 0.01 * (lab_size - 10)
+        y_max = float(totals.max()) * (1 + pad_frac)
+        fig.update_yaxes(range=[0, y_max], automargin=True)
+        if show_totals:
+            pixel_up = 6 + lab_size * 1.0
+            annotations = []
+            for x_val, y_val in totals.items():
+                annotations.append(dict(
+                    x=x_val, y=y_val, xref="x", yref="y",
+                    text=f"{int(y_val):,}".replace(",", "."),
+                    showarrow=False, yanchor="bottom", yshift=pixel_up,
+                    align="center", font=dict(size=lab_size, color=ANN_COL)
+                ))
+            prev = list(fig.layout.annotations) if fig.layout.annotations else []
+            fig.update_layout(annotations=prev + annotations)
+        _responsive_bar_style(fig, n_bars)
+        fig.update_layout(
+            margin=dict(t=50, b=70, l=10, r=10),
+            legend_title_text="Ítem",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+        )
 
     apply_plot_theme(fig)
     c1, c2 = st.columns([3, 1])
-    with c1: st.plotly_chart(fig, use_container_width=True)
-    with c2: render_kpis(df_f)
+    with c1:
+        st.plotly_chart(fig, use_container_width=True)
+    with c2:
+        render_kpis(df_f)
 
 # =========================================================
 # [S11] Vista 3 — Inicio/Fin
@@ -1002,7 +1159,8 @@ def most_common(lst: List[str]) -> str:
 
 def classify_any_row(row) -> str:
     raw = canon_item_from_text(row.get("ItemRaw"))
-    if raw: return raw
+    if raw:
+        return raw
     base = item_ext(row.get("Ubic.proced"), row.get("Ubicación de destino"))
     return base if base else "—"
 
@@ -1014,8 +1172,9 @@ def view_inicio_fin_turno():
         d["ItemExt_any"] = d.apply(classify_any_row, axis=1)
 
     recs = []
-    for (usr, fecha_op, turno), g in d.sort_values("DatetimeOper").groupby(["Usuario","FechaOper","Turno"]):
-        if g.empty: continue
+    for (usr, fecha_op, turno), g in d.sort_values("DatetimeOper").groupby(["Usuario", "FechaOper", "Turno"]):
+        if g.empty:
+            continue
         g = g.copy()
         g["t_vis"] = g["DatetimeOper"].apply(lambda ts: minutes_for_plot(ts, turno))
 
@@ -1050,7 +1209,7 @@ def view_inicio_fin_turno():
     one_day = (dd["FechaOper"].nunique() == 1)
 
     agg_rows = []
-    for (usr, turno), g in dd.groupby(["Usuario","Turno"]):
+    for (usr, turno), g in dd.groupby(["Usuario", "Turno"]):
         if one_day:
             r = g.iloc[-1]; n_dias = 1
             t_ini, t_alim, t_cie = r["t_ini"], r["t_alim"], r["t_cie"]
@@ -1060,12 +1219,12 @@ def view_inicio_fin_turno():
             extra_days = int(bool(r["extra"]))
         else:
             n_dias = g["FechaOper"].nunique()
-            t_ini  = g["t_ini"].mean(skipna=True)
+            t_ini = g["t_ini"].mean(skipna=True)
             t_alim = g["t_alim"].mean(skipna=True)
-            t_cie  = g["t_cie"].mean(skipna=True)
-            it_ini  = most_common(g["it_ini"].tolist())
+            t_cie = g["t_cie"].mean(skipna=True)
+            it_ini = most_common(g["it_ini"].tolist())
             it_alim = most_common(g["it_alim"].tolist())
-            it_cie  = most_common(g["it_cie"].tolist())
+            it_cie = most_common(g["it_cie"].tolist())
             modo = f"Promedio de {n_dias} días"
             extra_days = int(g["extra"].sum())
             extra_info = f"{extra_days} de {n_dias} días con extra"
@@ -1082,7 +1241,7 @@ def view_inicio_fin_turno():
         st.info("No hay agregaciones para mostrar.")
         return
 
-    agg["TurnoAB"] = agg["Turno"].str.replace("Turno ","", regex=False)
+    agg["TurnoAB"] = agg["Turno"].str.replace("Turno ", "", regex=False)
     agg["UsuarioTurnoShort"] = agg.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
     order_axis = sorted(agg["UsuarioTurnoShort"].unique().tolist())
 
@@ -1090,17 +1249,26 @@ def view_inicio_fin_turno():
     for _, r in agg.iterrows():
         t_ini = r["t_ini"]; t_alim = r["t_alim"] if pd.notna(r["t_alim"]) else None
         base_for_end = t_alim if t_alim is not None else t_ini
-        seg_ini  = max(0.0, float(t_ini))
+        seg_ini = max(0.0, float(t_ini))
         seg_alim = max(0.0, float(t_alim - t_ini)) if t_alim is not None else 0.0
-        seg_cie  = max(0.0, float(r["t_cie"] - base_for_end))
+        seg_cie = max(0.0, float(r["t_cie"] - base_for_end))
         rows += [
-            {"UsuarioTurnoShort": r["UsuarioTurnoShort"], "Hito": "Inicio",
-             "Seg": seg_ini, "Hora": fmt_hhmm(t_ini), "Info": r["modo"], "Item": r["it_ini"], "Extra": r["extra_info"]},
-            {"UsuarioTurnoShort": r["UsuarioTurnoShort"], "Hito": "Antes de alimentación",
-             "Seg": seg_alim, "Hora": fmt_hhmm(t_alim) if t_alim is not None else "—",
-             "Info": r["modo"], "Item": r["it_alim"] if t_alim is not None else "—", "Extra": r["extra_info"]},
-            {"UsuarioTurnoShort": r["UsuarioTurnoShort"], "Hito": "Antes de cierre",
-             "Seg": seg_cie, "Hora": fmt_hhmm(r["t_cie"]), "Info": r["modo"], "Item": r["it_cie"], "Extra": r["extra_info"]},
+            {
+                "UsuarioTurnoShort": r["UsuarioTurnoShort"], "Hito": "Inicio",
+                "Seg": seg_ini, "Hora": fmt_hhmm(t_ini), "Info": r["modo"],
+                "Item": r["it_ini"], "Extra": r["extra_info"]
+            },
+            {
+                "UsuarioTurnoShort": r["UsuarioTurnoShort"], "Hito": "Antes de alimentación",
+                "Seg": seg_alim, "Hora": fmt_hhmm(t_alim) if t_alim is not None else "—",
+                "Info": r["modo"], "Item": r["it_alim"] if t_alim is not None else "—",
+                "Extra": r["extra_info"]
+            },
+            {
+                "UsuarioTurnoShort": r["UsuarioTurnoShort"], "Hito": "Antes de cierre",
+                "Seg": seg_cie, "Hora": fmt_hhmm(r["t_cie"]), "Info": r["modo"],
+                "Item": r["it_cie"], "Extra": r["extra_info"]
+            },
         ]
 
     m = pd.DataFrame(rows)
@@ -1112,36 +1280,51 @@ def view_inicio_fin_turno():
     ticks = list(range(0, y_max+1, 60))
     ticktext = [fmt_hhmm(t) for t in ticks]
 
-    hover_tmpl = "Hito: %{customdata[0]}<br>Hora: %{customdata[1]}<br>%{customdata[2]}<br>Ítem más común: %{customdata[3]}<br>Horas extra: %{customdata[4]}<extra></extra>"
+    hover_tmpl = (
+        "Hito: %{customdata[0]}<br>Hora: %{customdata[1]}<br>%{customdata[2]}"
+        "<br>Ítem más común: %{customdata[3]}<br>Horas extra: %{customdata[4]}<extra></extra>"
+    )
     many = len(order_axis) > 14
 
     if many:
         height = max(460, 22*len(order_axis) + 120)
-        fig = px.bar(m, y="UsuarioTurnoShort", x="Seg", color="Hito", barmode="stack",
-                     category_orders={"UsuarioTurnoShort": order_axis, "Hito": ["Inicio","Antes de alimentación","Antes de cierre"]},
-                     color_discrete_map={"Inicio":"#1F77B4","Antes de alimentación":"#E4572E","Antes de cierre":"#2CA02C"},
-                     custom_data=["Hito","Hora","Info","Item","Extra"], height=height, orientation="h")
+        fig = px.bar(
+            m, y="UsuarioTurnoShort", x="Seg", color="Hito", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "Hito": ["Inicio", "Antes de alimentación", "Antes de cierre"]},
+            color_discrete_map={"Inicio": "#1F77B4", "Antes de alimentación": "#E4572E", "Antes de cierre": "#2CA02C"},
+            custom_data=["Hito", "Hora", "Info", "Item", "Extra"], height=height, orientation="h"
+        )
         fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.96, cliponaxis=False)
         fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=10))
         fig.update_xaxes(tickvals=ticks, ticktext=ticktext, title="Hora del día (HH:MM)")
     else:
         height = max(480, 26*len(order_axis) + 120)
-        fig = px.bar(m, x="UsuarioTurnoShort", y="Seg", color="Hito", barmode="stack",
-                     category_orders={"UsuarioTurnoShort": order_axis, "Hito": ["Inicio","Antes de alimentación","Antes de cierre"]},
-                     color_discrete_map={"Inicio":"#1F77B4","Antes de alimentación":"#E4572E","Antes de cierre":"#2CA02C"},
-                     custom_data=["Hito","Hora","Info","Item","Extra"], height=height)
+        fig = px.bar(
+            m, x="UsuarioTurnoShort", y="Seg", color="Hito", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "Hito": ["Inicio", "Antes de alimentación", "Antes de cierre"]},
+            color_discrete_map={"Inicio": "#1F77B4", "Antes de alimentación": "#E4572E", "Antes de cierre": "#2CA02C"},
+            custom_data=["Hito", "Hora", "Info", "Item", "Extra"], height=height
+        )
         fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.96, cliponaxis=False)
-        fig.update_xaxes(categoryorder="array", categoryarray=order_axis,
-                         tickangle=(-65 if len(order_axis) > 8 else -30), tickfont=dict(size=10))
+        fig.update_xaxes(
+            categoryorder="array", categoryarray=order_axis,
+            tickangle=(-65 if len(order_axis) > 8 else -30), tickfont=dict(size=10)
+        )
         if len(order_axis) <= 12:
-            fig.add_trace(go.Scatter(x=top_per_bar.index.tolist(), y=top_per_bar.values,
-                                     mode="text", text=[fmt_hhmm(v) for v in top_per_bar.values],
-                                     textposition="top center", textfont=dict(size=11, color=ANN_COL),
-                                     showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scatter(
+                x=top_per_bar.index.tolist(), y=top_per_bar.values,
+                mode="text", text=[fmt_hhmm(v) for v in top_per_bar.values],
+                textposition="top center", textfont=dict(size=11, color=ANN_COL),
+                showlegend=False, hoverinfo="skip"
+            ))
         fig.update_yaxes(tickvals=ticks, ticktext=ticktext, title="Hora del día (HH:MM)")
 
     _responsive_bar_style(fig, len(order_axis))
-    fig.update_layout(margin=dict(t=10,b=10,l=10,r=160), legend_title_text="Hito")
+    fig.update_layout(
+        margin=dict(t=10, b=70, l=10, r=10),
+        legend_title_text="Hito",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+    )
     apply_plot_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
 
