@@ -822,46 +822,72 @@ def view_tm_por_usuario_turno():
     hover_tmpl_h = "Ítem: %{customdata[0]}<br>Minutos TM: %{customdata[1]:.0f}m<extra></extra>"
 
     chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
-    if chart_is_h:
-        height = max(320, 24*len(order_axis) + 110)
-        fig = px.bar(g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
-                     barmode="stack",
-                     category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-                     color_discrete_map=EXT_COLOR_MAP,
-                     custom_data=["ItemExt","Min"], height=height)
-        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
-        fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=12))
+chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
 
-        totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-        fig.add_trace(go.Scatter(x=totals.values, y=totals.index.tolist(), mode="text",
-                                 text=[f"{v:.0f} min" for v in totals.values],
-                                 textposition="middle right", textfont=dict(size=12, color=ANN_COL),
-                                 showlegend=False, hoverinfo="skip"))
-        xmax = max(1, float(totals.max()))
-        fig.update_xaxes(range=[0, xmax*1.06], tickfont=dict(size=12))
-        _responsive_bar_style(fig, len(order_axis))
-        fig.update_layout(margin=dict(t=10,b=10,l=10,r=110), legend_title_text="Ítem")
-    else:
-        height = max(420, 24*len(order_axis) + 60)
-        fig = px.bar(g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
-                     category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-                     color_discrete_map=EXT_COLOR_MAP,
-                     custom_data=["ItemExt","Min"], height=height)
-        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
-        tick_angle = -65 if len(order_axis) > 8 else -30
-        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
-        totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-        ymax = float(totals.max())*1.18
-        fig.update_yaxes(range=[0, ymax])
-        fig.add_trace(go.Bar(x=totals.index.tolist(), y=totals.values,
-                             marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
-                             text=[f"{v:.0f}" for v in totals.values],
-                             textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False))
-        _responsive_bar_style(fig, len(order_axis))
-        fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), legend_title_text="Ítem")
+if chart_is_h:
+    # --- BARRA HORIZONTAL ---
+    height = max(320, 24*len(order_axis) + 110)
+    fig = px.bar(
+        g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
+        barmode="stack",
+        category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+        color_discrete_map=EXT_COLOR_MAP,
+        custom_data=["ItemExt","Min"], height=height
+    )
+    fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
+    fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=12))
 
-    apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
+    fig.add_trace(go.Scatter(
+        x=totals.values, y=totals.index.tolist(), mode="text",
+        text=[f"{v:.0f} min" for v in totals.values],
+        textposition="middle right", textfont=dict(size=12, color=ANN_COL),
+        showlegend=False, hoverinfo="skip"
+    ))
+    xmax = max(1, float(totals.max()))
+    fig.update_xaxes(range=[0, xmax*1.06], tickfont=dict(size=12))
+
+    _responsive_bar_style(fig, len(order_axis))
+    fig.update_layout(
+        margin=dict(t=10, b=60, l=10, r=10),
+        legend_title_text="Ítem",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+    )
+
+else:
+    # --- BARRA VERTICAL ---
+    height = max(420, 24*len(order_axis) + 60)
+    fig = px.bar(
+        g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
+        category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+        color_discrete_map=EXT_COLOR_MAP,
+        custom_data=["ItemExt","Min"], height=height
+    )
+    fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
+    tick_angle = -65 if len(order_axis) > 8 else -30
+    fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
+
+    totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
+    ymax = float(totals.max()) * 1.18
+    fig.update_yaxes(range=[0, ymax])
+
+    fig.add_trace(go.Bar(
+        x=totals.index.tolist(), y=totals.values,
+        marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
+        text=[f"{v:.0f}" for v in totals.values],
+        textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False
+    ))
+
+    _responsive_bar_style(fig, len(order_axis))
+    fig.update_layout(
+        margin=dict(t=10, b=60, l=10, r=10),
+        legend_title_text="Ítem",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+    )
+
+apply_plot_theme(fig)
+st.plotly_chart(fig, use_container_width=True)
+
 
 # =========================================================
 # [S10] Vista 2 — Órdenes OT por usuario/turno
