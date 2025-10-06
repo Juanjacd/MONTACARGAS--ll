@@ -520,35 +520,51 @@ with st.sidebar:
         key="ruta_excel_ui"
         )
 
+        # --- CSS robusto para cambiar el texto del botón del uploader ---
+st.markdown("""
+<style>
+/* Asegura posición relativa para poder escribir el ::after */
+#uploader-excel [data-testid="stFileUploader"] button,
+#uploader-excel [data-testid="stFileUploader"] label {
+  position: relative !important;
+}
 
-        # --- CSS para cambiar el texto del botón ---
-        st.markdown("""
-        <style>
-        #uploader-excel [data-testid="stFileUploader"] button span,
-        #uploader-excel [data-testid="stFileUploader"] button div p {
-          visibility: hidden !important;
-        }
-        #uploader-excel [data-testid="stFileUploader"] button::after {
-          content: "Subir Excel";
-          visibility: visible;
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 600;
-        }
-        #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div > span {
-          visibility: hidden;
-        }
-        #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div::after {
-          content: "o arrastra aquí el archivo .xlsx";
-          visibility: visible;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+/* Oculta el texto original del botón (puede ser span o p) */
+#uploader-excel [data-testid="stFileUploader"] button span,
+#uploader-excel [data-testid="stFileUploader"] button p,
+#uploader-excel [data-testid="stFileUploader"] label span,
+#uploader-excel [data-testid="stFileUploader"] label p {
+  opacity: 0 !important;
+}
 
-        st.markdown('</div>', unsafe_allow_html=True)
+/* Pone el texto nuevo encima del botón */
+#uploader-excel [data-testid="stFileUploader"] button::after,
+#uploader-excel [data-testid="stFileUploader"] label::after {
+  content: "Subir Excel";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* (Opcional) Cambiar el texto de arrastrar archivo */
+#uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div > span,
+#uploader-excel [data-testid="stFileUploaderDropzoneInstructions"] > div > span {
+  opacity: 0 !important;
+}
+#uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div::after,
+#uploader-excel [data-testid="stFileUploaderDropzoneInstructions"] > div::after {
+  content: "o arrastra aquí el archivo .xlsx";
+  display: inline-block;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+
 
         # 2) Opción de ruta local automática
         local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx", key="ruta_excel")
