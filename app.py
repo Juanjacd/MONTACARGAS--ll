@@ -500,48 +500,50 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
 # =========================================================
 # [S7] Sidebar: carga + preferencias + filtros  (AUTO LOCAL + fallback uploader)
 # =========================================================
-with st.sidebar:
 # === PANEL IZQUIERDO (sidebar) ===
-panel = st.sidebar.container()
+with st.sidebar:
+    panel = st.container()
 
-with panel.expander("📥 Carga de datos", expanded=True):
-    up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
-    hoja_up = None
-    if up is not None:
-        try:
-            xls_tmp = pd.ExcelFile(up)
-            hojas = xls_tmp.sheet_names
-            hoja_up = st.selectbox(
-                "Hoja (archivo subido)",
-                hojas,
-                index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
-                key="hoja_up"
-            )
-        except Exception:
-            hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
-        finally:
-            if hasattr(up, "seek"):
-                up.seek(0)
+    with panel.expander("📥 Carga de datos", expanded=True):
+        up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
+        hoja_up = None
+        if up is not None:
+            try:
+                xls_tmp = pd.ExcelFile(up)
+                hojas = xls_tmp.sheet_names
+                hoja_up = st.selectbox(
+                    "Hoja (archivo subido)",
+                    hojas,
+                    index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
+                    key="hoja_up"
+                )
+            except Exception:
+                hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
+            finally:
+                if hasattr(up, "seek"):
+                    up.seek(0)
 
-    # 2) Opción de ruta local automática
-    auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
-    local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx", key="ruta_excel")
+        # 2) Opción de ruta local automática
+        auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
+        local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx", key="ruta_excel")
 
-    st.caption("Histórico SQLite")
-    use_db = st.checkbox("Usar histórico", value=True, key="use_db")
-    DB_PATH = st.text_input("Archivo DB", value="montacargas.db", key="db_path")
-    col1, col2 = st.columns(2)
-    with col1:
-        btn_clear = st.button("🧹 Limpiar histórico", key="btn_clear")
-    with col2:
-        btn_reload = st.button("🔁 Recargar histórico", key="btn_reload")
+        st.caption("Histórico SQLite")
+        use_db = st.checkbox("Usar histórico", value=True, key="use_db")
+        DB_PATH = st.text_input("Archivo DB", value="montacargas.db", key="db_path")
 
-# (Opcional) mover también Preferencias al mismo panel:
-with panel.expander("⚙️ Preferencias", expanded=False):
-    chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"], key="chart_type_sel")
-    pal_name = st.selectbox("🎨 Paleta", list(PALETTES.keys()), index=0, key="paleta_sel")
-    st.session_state["pal_name"] = pal_name
-    st.session_state["chart_type"] = chart_type
+        col1, col2 = st.columns(2)
+        with col1:
+            btn_clear = st.button("🧹 Limpiar histórico", key="btn_clear")
+        with col2:
+            btn_reload = st.button("🔁 Recargar histórico", key="btn_reload")
+
+    # (Opcional) mover también Preferencias al mismo panel:
+    with panel.expander("⚙️ Preferencias", expanded=False):
+        chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"], key="chart_type_sel")
+        pal_name = st.selectbox("🎨 Paleta", list(PALETTES.keys()), index=0, key="paleta_sel")
+        st.session_state["pal_name"] = pal_name
+        st.session_state["chart_type"] = chart_type
+
 
 
 # ✅ Paleta segura (evita KeyError si el nombre por defecto no existe)
