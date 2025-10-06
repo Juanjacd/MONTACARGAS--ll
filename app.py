@@ -143,18 +143,24 @@ with st.sidebar:
     st.markdown("---")
 
 def apply_plot_theme(fig):
-    is_dark = bool(dark)
+    # Siempre tema claro
     fig.update_layout(
-        template=("plotly_dark" if is_dark else "plotly_white"),
-        paper_bgcolor=("#0f172a" if is_dark else "#ffffff"),
-        plot_bgcolor=("#0b1220" if is_dark else "#ffffff"),
-        font=dict(color=("#e5e7eb" if is_dark else "#0f172a")),
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0)"),
+        template="plotly_white",
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font=dict(color="#0f172a"),
+        legend=dict(
+            orientation="v",
+            yanchor="top", y=1,
+            xanchor="left", x=1.02,
+            bgcolor="rgba(0,0,0,0)"
+        ),
         showlegend=True,
         hoverlabel=dict(font_size=12)
     )
     fig.update_xaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
     fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
+
 
 
 ANN_COL = "#6B7280"
