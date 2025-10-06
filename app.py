@@ -1001,35 +1001,72 @@ def view_ordenes_ot():
             legend_title_text="Ítem",
             legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
         )
-    else:
-        height = max(420, 24*len(order_axis) + 60)
-        fig = px.bar(
-            g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
-            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-            color_discrete_map=EXT_COLOR_MAP,
-            custom_data=["ItemExt","Min"], height=height
-        )
-        fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
-        tick_angle = -65 if len(order_axis) > 8 else -30
-        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
-        totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-        ymax = float(totals.max())*1.18
-        fig.update_yaxes(range=[0, ymax])
-        fig.add_trace(go.Bar(
-            x=totals.index.tolist(), y=totals.values,
-            marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
+    # === BLOQUE BARRA VERTICAL ===
+else:
+    height = max(420, 24*len(order_axis) + 60)
+    fig = px.bar(
+        g,
+        x="UsuarioTurnoShort",
+        y="Min",
+        color="ItemExt",
+        barmode="stack",
+        category_orders={
+            "UsuarioTurnoShort": order_axis,
+            "ItemExt": (sel_items if sel_items else avail_items)
+        },
+        color_discrete_map=EXT_COLOR_MAP,
+        custom_data=["ItemExt","Min"],
+        height=height
+    )
+    fig.update_traces(
+        hovertemplate=hover_tmpl_h,
+        marker_line_width=0,
+        opacity=0.95,
+        cliponaxis=False
+    )
+    tick_angle = -65 if len(order_axis) > 8 else -30
+    fig.update_xaxes(
+        categoryorder="array",
+        categoryarray=order_axis,
+        tickangle=tick_angle,
+        tickfont=dict(size=10)
+    )
+    totals = (
+        g.groupby("UsuarioTurnoShort")["Min"]
+         .sum()
+         .reindex(order_axis)
+    )
+    ymax = float(totals.max()) * 1.18
+    fig.update_yaxes(range=[0, ymax])
+    fig.add_trace(
+        go.Bar(
+            x=totals.index.tolist(),
+            y=totals.values,
+            marker_color='rgba(0,0,0,0)',
+            showlegend=False,
+            hoverinfo="skip",
             text=[f"{v:.0f}" for v in totals.values],
-            textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False
-        ))
-        _responsive_bar_style(fig, len(order_axis))
-        fig.update_layout(
-            margin=dict(t=10, b=60, l=10, r=10),
-            legend_title_text="Ítem",
-            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+            textposition="outside",
+            textfont=dict(size=10, color=ANN_COL),
+            cliponaxis=False
         )
+    )
 
-    apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    _responsive_bar_style(fig, len(order_axis))
+    fig.update_layout(
+        margin=dict(t=10, b=60, l=10, r=10),
+        legend_title_text="Ítem",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.22,
+            xanchor="center",
+            x=0.5
+        )
+    )
+
+apply_plot_theme(fig)
+st.plotly_chart(fig, use_container_width=True)
 
 # =========================================================
 # [S10] Vista 2 — Órdenes OT por usuario/turno
