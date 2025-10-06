@@ -10,8 +10,7 @@ from cfg import APP_TITLE, APP_TAGLINE
 
 import numpy as np
 if not hasattr(np, "bool"):
-    np.bool = bool
-Es simplemente poner los cabeceros a un carro 
+    np.bool = bool 
 import streamlit as st
 import pandas as pd
 
