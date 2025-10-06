@@ -550,7 +550,6 @@ with st.sidebar:
         st.markdown('</div>', unsafe_allow_html=True)
 
         # 2) Opción de ruta local automática
-        auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
         local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx", key="ruta_excel")
 
     st.caption("Histórico SQLite")
