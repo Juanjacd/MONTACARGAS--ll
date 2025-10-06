@@ -490,8 +490,8 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
 with st.sidebar:
     panel = st.container()
 
-    with panel.expander("📥 Carga de datos", expanded=True):
-    # --- Wrapper para limitar el CSS a este uploader
+   with panel.expander("📥 Carga de datos", expanded=True):
+    # --- Wrapper para limitar el CSS a este uploader ---
     st.markdown('<div id="uploader-excel">', unsafe_allow_html=True)
 
     up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
@@ -512,13 +512,12 @@ with st.sidebar:
             if hasattr(up, "seek"):
                 up.seek(0)
 
-    # --- CSS: cambiar texto del botón a "Subir Excel"
+    # --- CSS: cambiar texto del botón a "Subir Excel" y (opcional) el de arrastre ---
     st.markdown("""
     <style>
-    /* Limitar el alcance al wrapper de este uploader */
     #uploader-excel [data-testid="stFileUploader"] button span,
     #uploader-excel [data-testid="stFileUploader"] button div p {
-      visibility: hidden !important;  /* oculta "Browse files" */
+      visibility: hidden !important;
     }
     #uploader-excel [data-testid="stFileUploader"] button::after {
       content: "Subir Excel";
@@ -530,8 +529,6 @@ with st.sidebar:
       justify-content: center;
       font-weight: 600;
     }
-
-    /* (Opcional) cambia el texto de arrastrar-archivo */
     #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div > span {
       visibility: hidden;
     }
@@ -539,8 +536,6 @@ with st.sidebar:
       content: "o arrastra aquí el archivo .xlsx";
       visibility: visible;
     }
-
-    /* (Opcional) tamaño en móviles */
     @media (max-width: 768px){
       #uploader-excel [data-testid="stFileUploader"] button::after { font-size: 14px; }
     }
@@ -548,7 +543,6 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
-
 
         # 2) Opción de ruta local automática
         auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
