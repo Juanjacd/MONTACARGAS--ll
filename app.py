@@ -515,10 +515,11 @@ with st.sidebar:
         # ✅ ESTE BLOQUE VA DENTRO DEL EXPANDER, NO AFUERA
         auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
         local_path = st.text_input(
-            "Ruta del Excel",
-            value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx",
-            key="ruta_excel"
+        "Ruta del Excel",
+        value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx",
+        key="ruta_excel_ui"
         )
+
 
         # --- CSS para cambiar el texto del botón ---
         st.markdown("""
