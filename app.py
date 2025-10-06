@@ -1,4 +1,4 @@
-# =========================================================
+F# =========================================================
 # DASHBOARD MONTACARGAS — TM + Órdenes OT + Inicio/Fin (auto horas extra)
 # =========================================================
 
@@ -849,24 +849,49 @@ def view_tm_por_usuario_turno():
 # [S10] Vista 2 — Órdenes OT por usuario/turno
 # =========================================================
 def view_ordenes_ot():
-    render_section_title("Órdenes OT — total de movimientos por usuario y turno")
-        # --- BLINDAJE: garantizar ItemExt y listas de ítems ---
-    if "ItemExt" not in df_f.columns:
-        df_aux = df_f.copy()
-        df_aux["ItemExt"] = df_aux.apply(
+       render_section_title("Órdenes OT — total de movimientos por usuario y turno")
+
+    # --- FUENTE SEGURA Y BLINDAJE ---
+    # 1) Tomar df_f si existe y no está vacío
+    d = df_f.copy() if 'df_f' in globals() else pd.DataFrame()
+    if d is None or d.empty:
+        st.info("No hay datos para 'Órdenes OT' con el filtro actual.")
+        return
+
+    # 2) Verificar columnas base
+    for _col in ("Usuario", "Turno"):
+        if _col not in d.columns:
+            st.warning(f"Falta columna requerida: '{_col}'.")
+            return
+
+    # 3) Garantizar ItemExt si no viene construido
+    if "ItemExt" not in d.columns:
+        d["ItemExt"] = d.apply(
             lambda r: (canon_item_from_text(r.get("ItemRaw"))
                        or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
                        or "—"),
             axis=1
         )
-    else:
-        df_aux = df_f
 
-    avail_items = sorted([x for x in df_aux["ItemExt"].dropna().unique().tolist()])
+    # 4) (Opcional) respetar selección de ítems si la manejas en session_state
+    avail_items = sorted([x for x in d["ItemExt"].dropna().unique().tolist()])
     sel_items = st.session_state.get("sel_items", [])
+    if sel_items:
+        d = d[d["ItemExt"].isin(sel_items)]
+        if d.empty:
+            st.info("Sin registros para los ítems seleccionados.")
+            return
 
-    # A partir de aquí usa df_aux en lugar de df_f para la agregación
-    cnt = (df_aux.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
+    # 5) Agrupación ya blindada (sin KeyError)
+    cnt = (
+        d.groupby(["Usuario", "Turno", "ItemExt"])
+         .size()
+         .reset_index(name="CNT")
+    )
+    if cnt.empty:
+        st.info("No hay órdenes en el filtro actual para 'Órdenes OT'.")
+        return
+
 
     cnt = (df_aux.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
     
