@@ -512,38 +512,42 @@ with st.sidebar:
                 if hasattr(up, "seek"):
                     up.seek(0)
 
+        # ✅ ESTE BLOQUE VA DENTRO DEL EXPANDER, NO AFUERA
+        auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
+        local_path = st.text_input(
+            "Ruta del Excel",
+            value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx",
+            key="ruta_excel"
+        )
 
-    # --- CSS: cambiar texto del botón a "Subir Excel" y (opcional) el de arrastre ---
-    st.markdown("""
-    <style>
-    #uploader-excel [data-testid="stFileUploader"] button span,
-    #uploader-excel [data-testid="stFileUploader"] button div p {
-      visibility: hidden !important;
-    }
-    #uploader-excel [data-testid="stFileUploader"] button::after {
-      content: "Subir Excel";
-      visibility: visible;
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-    }
-    #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div > span {
-      visibility: hidden;
-    }
-    #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div::after {
-      content: "o arrastra aquí el archivo .xlsx";
-      visibility: visible;
-    }
-    @media (max-width: 768px){
-      #uploader-excel [data-testid="stFileUploader"] button::after { font-size: 14px; }
-    }
-    </style>
-    """, unsafe_allow_html=True)
+        # --- CSS para cambiar el texto del botón ---
+        st.markdown("""
+        <style>
+        #uploader-excel [data-testid="stFileUploader"] button span,
+        #uploader-excel [data-testid="stFileUploader"] button div p {
+          visibility: hidden !important;
+        }
+        #uploader-excel [data-testid="stFileUploader"] button::after {
+          content: "Subir Excel";
+          visibility: visible;
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+        }
+        #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div > span {
+          visibility: hidden;
+        }
+        #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div::after {
+          content: "o arrastra aquí el archivo .xlsx";
+          visibility: visible;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # 2) Opción de ruta local automática
         auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
