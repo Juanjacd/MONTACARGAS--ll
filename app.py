@@ -141,26 +141,6 @@ st.markdown(BASE_STYLE, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("---")
-    dark = st.checkbox("🌙 Modo oscuro", value=True, help="Cambia colores (app + gráficas)")
-
-if dark:
-    st.markdown("""
-    <style>
-    :root{ --bg:#0b1220; --panel:#0f172a; --ink:#e5e7eb; --muted:#cbd5e1; --border:#1f2937; --accent:#22d3ee;}
-    html, body, #root, .stApp, main, .main, .block-container,
-    [data-testid="stAppViewContainer"], [data-testid="stSidebar"], header[data-testid="stHeader"]{
-      background-color: var(--bg) !important; color: var(--ink) !important;
-    }
-    section[data-testid="stSidebar"], section[data-testid="stSidebar"] *{
-      background-color: transparent !important; color: var(--ink) !important;
-    }
-    .hero, .section, .note-box, .kpi-card,
-    div[data-testid="stExpander"] details{ background: var(--panel) !important; color: var(--ink) !important; border-color: var(--border) !important; }
-    [data-baseweb="select"] > div{ background: var(--panel) !important; border:1px solid var(--border)!important; border-radius:10px!important; }
-    .stDateInput input, input, textarea{ background: var(--panel)!important; color: var(--ink)!important; border:1px solid var(--border)!important; }
-    </style>
-    """, unsafe_allow_html=True)
-
 
 def apply_plot_theme(fig):
     is_dark = bool(dark)
@@ -177,7 +157,7 @@ def apply_plot_theme(fig):
     fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticks="", tickformat=",d")
 
 
-ANN_COL = "#e5e7eb" if dark else "#6B7280"
+ANN_COL = "#6B7280"
 
 # =========================================================
 # [S2] Reglas de turnos y paletas
