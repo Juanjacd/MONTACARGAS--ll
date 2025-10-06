@@ -491,23 +491,64 @@ with st.sidebar:
     panel = st.container()
 
     with panel.expander("📥 Carga de datos", expanded=True):
-        up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
-        hoja_up = None
-        if up is not None:
-            try:
-                xls_tmp = pd.ExcelFile(up)
-                hojas = xls_tmp.sheet_names
-                hoja_up = st.selectbox(
-                    "Hoja (archivo subido)",
-                    hojas,
-                    index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
-                    key="hoja_up"
-                )
-            except Exception:
-                hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
-            finally:
-                if hasattr(up, "seek"):
-                    up.seek(0)
+    # --- Wrapper para limitar el CSS a este uploader
+    st.markdown('<div id="uploader-excel">', unsafe_allow_html=True)
+
+    up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
+    hoja_up = None
+    if up is not None:
+        try:
+            xls_tmp = pd.ExcelFile(up)
+            hojas = xls_tmp.sheet_names
+            hoja_up = st.selectbox(
+                "Hoja (archivo subido)",
+                hojas,
+                index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
+                key="hoja_up"
+            )
+        except Exception:
+            hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
+        finally:
+            if hasattr(up, "seek"):
+                up.seek(0)
+
+    # --- CSS: cambiar texto del botón a "Subir Excel"
+    st.markdown("""
+    <style>
+    /* Limitar el alcance al wrapper de este uploader */
+    #uploader-excel [data-testid="stFileUploader"] button span,
+    #uploader-excel [data-testid="stFileUploader"] button div p {
+      visibility: hidden !important;  /* oculta "Browse files" */
+    }
+    #uploader-excel [data-testid="stFileUploader"] button::after {
+      content: "Subir Excel";
+      visibility: visible;
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+
+    /* (Opcional) cambia el texto de arrastrar-archivo */
+    #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div > span {
+      visibility: hidden;
+    }
+    #uploader-excel [data-testid="stFileUploader"] [data-testid="stFileDropzoneInstructions"] > div::after {
+      content: "o arrastra aquí el archivo .xlsx";
+      visibility: visible;
+    }
+
+    /* (Opcional) tamaño en móviles */
+    @media (max-width: 768px){
+      #uploader-excel [data-testid="stFileUploader"] button::after { font-size: 14px; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
         # 2) Opción de ruta local automática
         auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
