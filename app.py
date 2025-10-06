@@ -1008,7 +1008,6 @@ def view_ordenes_ot():
         )
     )
 
-else:
     # === BLOQUE BARRA VERTICAL ===
     height = max(420, 24*len(order_axis) + 60)
     fig = px.bar(
