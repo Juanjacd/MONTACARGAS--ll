@@ -868,7 +868,8 @@ def view_ordenes_ot():
     # A partir de aquí usa df_aux en lugar de df_f para la agregación
     cnt = (df_aux.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
 
-    cnt = (df_f.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
+    cnt = (df_aux.groupby(["Usuario","Turno","ItemExt"]).size().reset_index(name="CNT"))
+    
     if cnt.empty:
         st.info("No hay órdenes en el filtro actual para 'Órdenes OT'."); return
     cnt["TurnoAB"] = cnt["Turno"].str.replace("Turno ","", regex=False)
