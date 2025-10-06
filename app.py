@@ -505,20 +505,22 @@ with st.expander("📥 Carga de datos", expanded=True):
     # 1) Botón SIEMPRE visible para carga manual
     up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
     hoja_up = None
-    if up is not None:
-        try:
-            xls_tmp = pd.ExcelFile(up); hojas = xls_tmp.sheet_names
-            hoja_up = st.selectbox(
-                "Hoja (archivo subido)",
-                hojas,
-                index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
-                key="hoja_up"
-            )
-                except Exception:
-            hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
-        finally:
-            if hasattr(up, "seek"):
-                up.seek(0)
+   if up is not None:
+    try:
+        xls_tmp = pd.ExcelFile(up)
+        hojas = xls_tmp.sheet_names
+        hoja_up = st.selectbox(
+            "Hoja (archivo subido)",
+            hojas,
+            index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
+            key="hoja_up"
+        )
+    except Exception:
+        hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
+    finally:
+        if hasattr(up, "seek"):
+            up.seek(0)
+
 
 
     # 2) Opción de ruta local automática (por si no subes archivo)
