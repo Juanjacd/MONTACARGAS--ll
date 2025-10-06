@@ -505,7 +505,7 @@ with st.expander("📥 Carga de datos", expanded=True):
     # 1) Botón SIEMPRE visible para carga manual
     up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
     hoja_up = None
-   if up is not None:
+    if up is not None:
     try:
         xls_tmp = pd.ExcelFile(up)
         hojas = xls_tmp.sheet_names
