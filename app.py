@@ -853,7 +853,6 @@ if chart_is_h:
         legend_title_text="Ítem",
         legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
     )
-
 else:
     # --- BARRA VERTICAL ---
     height = max(420, 24*len(order_axis) + 60)
