@@ -527,15 +527,9 @@ with st.sidebar:
         auto_local = st.checkbox("Usar archivo local automático", value=True, key="auto_local")
         local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx", key="ruta_excel")
 
-        st.caption("Histórico SQLite")
-        use_db = st.checkbox("Usar histórico", value=True, key="use_db")
-        DB_PATH = st.text_input("Archivo DB", value="montacargas.db", key="db_path")
+    st.caption("Histórico SQLite")
+    DB_PATH = st.text_input("Archivo DB", value="montacargas.db", key="db_path")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            btn_clear = st.button("🧹 Limpiar histórico", key="btn_clear")
-        with col2:
-            btn_reload = st.button("🔁 Recargar histórico", key="btn_reload")
 
     # (Opcional) mover también Preferencias al mismo panel:
     with panel.expander("⚙️ Preferencias", expanded=False):
@@ -594,22 +588,30 @@ if df_new is None or df_new.empty:
 if df_new is None or df_new.empty:
     st.info("No hay datos para visualizar aún."); st.stop()
 
-# --- Histórico / DB ---
+# --- Histórico / DB (reemplazo por día; acumulación sin duplicados diarios) ---
 ensure_db(DB_PATH)
-if use_db:
-    if btn_clear: clear_db(DB_PATH); st.success("Histórico limpiado.")
-    if not df_new.empty: upsert_df(DB_PATH, df_new)
-    if btn_reload: clear_cache_compat(); st.success("Recargado."); rerun_compat()
-    df = read_all(DB_PATH)
-else:
-    df = df_new.copy()
 
-if df.empty:
-    st.info("No hay datos para visualizar aún."); st.stop()
+if not df_new.empty:
+    # 1) Días presentes en el archivo nuevo
+    try:
+        _dias_nuevos = sorted({str(d) for d in df_new['Fecha'] if pd.notnull(d)})
+    except Exception:
+        _dias_nuevos = []
 
-# --- Fecha operativa aplicada + marca IsExtra ---
-df = apply_oper_day(df)
-df = df[df["Turno"].isin(["Turno A","Turno B"])].copy()
+    # 2) Borrar SOLO esos días en la DB
+    if _dias_nuevos:
+        con = sqlite3.connect(DB_PATH)
+        cur = con.cursor()
+        cur.executemany(f"DELETE FROM {TABLE} WHERE fecha = ?", [(d,) for d in _dias_nuevos])
+        con.commit()
+        con.close()
+
+    # 3) Insertar lo nuevo
+    upsert_df(DB_PATH, df_new)
+
+# 4) Siempre leer desde la base
+df = read_all(DB_PATH)
+
 
 # ---------------- Filtros ----------------
 with st.sidebar:
