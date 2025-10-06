@@ -500,24 +500,39 @@ def load_excel(file, sheet_name="Hoja1") -> pd.DataFrame:
 # =========================================================
 # [S7] Sidebar: carga + preferencias + filtros  (AUTO LOCAL + fallback uploader)
 # =========================================================
-with st.expander("📥 Carga de datos", expanded=True):
-    up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
-    hoja_up = None
-    if up is not None:
-        try:
-            xls_tmp = pd.ExcelFile(up)
-            hojas = xls_tmp.sheet_names
-            hoja_up = st.selectbox(
-                "Hoja (archivo subido)",
-                hojas,
-                index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
-                key="hoja_up"
-            )
-        except Exception:
-            hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
-        finally:
-            if hasattr(up, "seek"):
-                up.seek(0)
+with st.sidebar:
+    with st.expander("📥 Carga de datos", expanded=True):
+        up = st.file_uploader("📎 Subir Excel (.xlsx)", type=["xlsx"], key="manual_xlsx")
+        hoja_up = None
+        if up is not None:
+            try:
+                xls_tmp = pd.ExcelFile(up)
+                hojas = xls_tmp.sheet_names
+                hoja_up = st.selectbox(
+                    "Hoja (archivo subido)",
+                    hojas,
+                    index=hojas.index("Hoja1") if "Hoja1" in hojas else 0,
+                    key="hoja_up"
+                )
+            except Exception:
+                hoja_up = st.text_input("Hoja (archivo subido)", value="Hoja1", key="hoja_up_txt")
+            finally:
+                if hasattr(up, "seek"):
+                    up.seek(0)
+
+        # 2) Opción de ruta local automática (ahora también en sidebar)
+        auto_local = st.checkbox("Usar archivo local automático", value=True)
+        local_path = st.text_input("Ruta del Excel", value=r"C:\montacargas\plantilla_montacargas_paraPag.xlsx")
+
+        st.caption("Histórico SQLite")
+        use_db = st.checkbox("Usar histórico", value=True)
+        DB_PATH = st.text_input("Archivo DB", value="montacargas.db")
+        col1, col2 = st.columns(2)
+        with col1:
+            btn_clear = st.button("🧹 Limpiar histórico")
+        with col2:
+            btn_reload = st.button("🔁 Recargar histórico")
+
 
 
 
@@ -535,11 +550,12 @@ with col2:
     btn_reload = st.button("🔁 Recargar histórico")
 
 # ✅ El expander va a nivel superior (no dentro de forms)
-with st.expander("⚙️ Preferencias", expanded=False):
-    chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"])
-    pal_name = st.selectbox("🎨 Paleta", list(PALETTES.keys()), index=0)
-    st.session_state["pal_name"] = pal_name
-    st.session_state["chart_type"] = chart_type
+with st.sidebar:
+    with st.expander("⚙️ Preferencias", expanded=False):
+        chart_type = st.selectbox("Orientación (Gráfica TM)", ["Barra horizontal", "Barra vertical"])
+        pal_name = st.selectbox("🎨 Paleta", list(PALETTES.keys()), index=0)
+        st.session_state["pal_name"] = pal_name
+        st.session_state["chart_type"] = chart_type
 
 # ✅ Paleta segura (evita KeyError si el nombre por defecto no existe)
 _default_palette = next(iter(PALETTES))  # primera clave disponible
