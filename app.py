@@ -740,7 +740,7 @@ def render_kpis(df_filtered: pd.DataFrame):
     """, unsafe_allow_html=True)
 
 # =========================================================
-# [S9] Vista 1 — TM por usuario/turno
+# [S9] Vista 1 — TM por usuario/turno  (LIMPIO)
 # =========================================================
 def view_tm_por_usuario_turno():
     render_section_title("Tiempo Muerto — dos barras por Usuario (Turno A y B), apilado por ítem")
@@ -749,7 +749,6 @@ def view_tm_por_usuario_turno():
 
     # --- BLINDAJE: garantizar ItemExt ---
     if "ItemExt" not in dtmp.columns:
-        # Clasificación mínima: primero por texto; si no, por origen/destino; si no, '—'
         dtmp["ItemExt"] = dtmp.apply(
             lambda r: (canon_item_from_text(r.get("ItemRaw"))
                        or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
@@ -762,26 +761,25 @@ def view_tm_por_usuario_turno():
 
     # --- Calcular gaps (TM) entre movimientos, descontando almuerzo/combustible ---
     df_g = dtmp.sort_values(["Usuario", "DatetimeOper"]).copy()
-    df_g["prev_dt"] = df_g.groupby("Usuario")["DatetimeOper"].shift(1)
+    df_g["prev_dt"]    = df_g.groupby("Usuario")["DatetimeOper"].shift(1)
     df_g["prev_fecha"] = df_g.groupby("Usuario")["FechaOper"].shift(1)
     df_g["prev_turno"] = df_g.groupby("Usuario")["Turno"].shift(1)
     same = (
-        df_g["prev_dt"].notna() &
-        (df_g["FechaOper"] == df_g["prev_fecha"]) &
-        (df_g["Turno"] == df_g["prev_turno"])
+        df_g["prev_dt"].notna()
+        & (df_g["FechaOper"] == df_g["prev_fecha"])
+        & (df_g["Turno"] == df_g["prev_turno"])
     )
     df_g = df_g[same].copy()
 
     EXC = [
         TURNOS["Turno A"]["lunch"], TURNOS["Turno A"]["fuel"],
-        TURNOS["Turno B"]["lunch"], TURNOS["Turno B"]["fuel"]
+        TURNOS["Turno B"]["lunch"], TURNOS["Turno B"]["fuel"],
     ]
 
     rows = []
     for _, r in df_g.iterrows():
         start = r["prev_dt"]; end = r["DatetimeOper"]; date = r["FechaOper"]
-        gap = (end - start).total_seconds() / 60.0
-        if gap <= 0:
+        if (end - start).total_seconds() <= 0:
             continue
 
         def subtract_window(seg_start, seg_end, win_start, win_end):
@@ -816,7 +814,7 @@ def view_tm_por_usuario_turno():
                 "Usuario": r["Usuario"],
                 "Turno": r["Turno"],
                 "ItemExt": r["ItemExt"],
-                "AdjMin": adj
+                "AdjMin": adj,
             })
 
     dead_ext = pd.DataFrame(rows)
@@ -887,7 +885,6 @@ def view_tm_por_usuario_turno():
             legend_title_text="Ítem",
             legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
         )
-
     else:
         # Barra vertical
         height = max(420, 24 * len(order_axis) + 60)
@@ -921,35 +918,6 @@ def view_tm_por_usuario_turno():
 
     apply_plot_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
-
-
-
-    fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
-    tick_angle = -65 if len(order_axis) > 8 else -30
-    fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
-
-    totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-    ymax = float(totals.max()) * 1.18
-    fig.update_yaxes(range=[0, ymax])
-
-    fig.add_trace(go.Bar(
-        x=totals.index.tolist(), y=totals.values,
-        marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
-        text=[f"{v:.0f}" for v in totals.values],
-        textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False
-    ))
-
-    _responsive_bar_style(fig, len(order_axis))
-    fig.update_layout(
-        margin=dict(t=10, b=60, l=10, r=10),
-        legend_title_text="Ítem",
-        legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
-    )
-
-    apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
-
-
 
 
 
@@ -1138,14 +1106,13 @@ def view_ordenes_ot():
 apply_plot_theme(fig)
 st.plotly_chart(fig, use_container_width=True)
 
-
 # =========================================================
-# [S10] Vista 2 — Órdenes OT por usuario/turno
+# [S10] Vista 2 — Órdenes OT por usuario/turno  (LIMPIO)
 # =========================================================
 def view_ordenes_ot():
     render_section_title("Órdenes OT — total de movimientos por usuario y turno")
 
-    # --- BLOQUE NUEVO (BLINDAJE) ---
+    # --- BLINDAJE ---
     d = df_f.copy() if 'df_f' in globals() else pd.DataFrame()
     if d is None or d.empty:
         st.info("No hay datos para 'Órdenes OT' con el filtro actual.")
@@ -1158,11 +1125,9 @@ def view_ordenes_ot():
 
     if "ItemExt" not in d.columns:
         d["ItemExt"] = d.apply(
-            lambda r: (
-                canon_item_from_text(r.get("ItemRaw"))
-                or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
-                or "—"
-            ),
+            lambda r: (canon_item_from_text(r.get("ItemRaw"))
+                       or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
+                       or "—"),
             axis=1
         )
 
@@ -1183,9 +1148,10 @@ def view_ordenes_ot():
         st.info("No hay órdenes en el filtro actual para 'Órdenes OT'.")
         return
 
-    # 🔹 A PARTIR DE AQUÍ SIGUE TU CÓDIGO ORIGINAL (ajustando leyenda y márgenes)
+    # --- Eje y orden ---
     cnt["TurnoAB"] = cnt["Turno"].str.replace("Turno ", "", regex=False)
     cnt["UsuarioTurnoShort"] = cnt.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
+
     order_users = (cnt.groupby("Usuario")["CNT"].sum().sort_values(ascending=False).index.tolist())
     order_axis, present_keys = [], set(cnt["UsuarioTurnoShort"])
     for u in order_users:
@@ -1198,6 +1164,7 @@ def view_ordenes_ot():
     show_totals = n_bars <= 12
     tick_angle = -65 if n_bars > 8 else -30
 
+    # --- Gráficas ---
     if n_bars > 14:
         hover_tmpl_h = "Ítem: %{customdata[0]}<br>Órdenes: %{customdata[1]:.0f}<br>%{customdata[2]}<extra></extra>"
         height = max(440, 22*n_bars + 120)
@@ -1205,7 +1172,7 @@ def view_ordenes_ot():
             cnt, y="UsuarioTurnoShort", x="CNT", color="ItemExt", barmode="stack",
             category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
             color_discrete_map=EXT_COLOR_MAP,
-            custom_data=["ItemExt", "CNT", "UsuarioTurnoShort"], height=height, orientation="h"
+            custom_data=["ItemExt","CNT","UsuarioTurnoShort"], height=height, orientation="h"
         )
         fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
         totals = (cnt.groupby("UsuarioTurnoShort")["CNT"].sum().reindex(order_axis))
@@ -1230,7 +1197,7 @@ def view_ordenes_ot():
             cnt, x="UsuarioTurnoShort", y="CNT", color="ItemExt", barmode="stack",
             category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
             color_discrete_map=EXT_COLOR_MAP,
-            custom_data=["ItemExt", "CNT", "UsuarioTurnoShort"], height=height
+            custom_data=["ItemExt","CNT","UsuarioTurnoShort"], height=height
         )
         fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, cliponaxis=False)
         fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
@@ -1265,6 +1232,8 @@ def view_ordenes_ot():
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         render_kpis(df_f)
+
+
 
 # =========================================================
 # [S11] Vista 3 — Inicio/Fin
