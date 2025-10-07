@@ -974,7 +974,6 @@ def view_ordenes_ot():
             if k in present_keys:
                 order_axis.append(k)
 
-
     n_bars = len(order_axis)
     show_totals = n_bars <= 12
     tick_angle = -65 if n_bars > 8 else -30
@@ -1103,8 +1102,9 @@ def view_ordenes_ot():
         )
     )
 
-apply_plot_theme(fig)
-st.plotly_chart(fig, use_container_width=True)
+    # ✅ REUBICADO: aplicar tema y renderizar DENTRO de la función
+    apply_plot_theme(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
 # =========================================================
 # [S10] Vista 2 — Órdenes OT por usuario/turno  (LIMPIO)
