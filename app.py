@@ -946,8 +946,10 @@ def view_tm_por_usuario_turno():
         legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
     )
 
-apply_plot_theme(fig)
-st.plotly_chart(fig, use_container_width=True)
+    apply_plot_theme(fig)
+    st.plotly_chart(fig, use_container_width=True)
+
+
 
 
 
