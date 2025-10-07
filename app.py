@@ -824,8 +824,6 @@ def view_tm_por_usuario_turno():
     chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
 chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
 
-if chart_is_h:
-    # --- BARRA HORIZONTAL ---
    
 if chart_is_h:
     # --- BARRA HORIZONTAL ---
