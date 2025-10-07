@@ -824,7 +824,32 @@ def view_tm_por_usuario_turno():
     chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
 chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
 
-   
+# --- Asegurar columnas y orden del eje antes de graficar ---
+# Si aún no existe UsuarioTurnoShort, constrúyelo desde g
+if "UsuarioTurnoShort" not in g.columns:
+    g["TurnoAB"] = g["Turno"].str.replace("Turno ", "", regex=False)
+    g["UsuarioTurnoShort"] = g.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
+
+# Ordenar usuarios por total de minutos (desc) y construir el eje intercalando A/B
+order_users = (
+    g.groupby("Usuario")["Min"]
+     .sum()
+     .sort_values(ascending=False)
+     .index.tolist()
+)
+
+order_axis, present_keys = [], set(g["UsuarioTurnoShort"])
+for u in order_users:
+    for ab in ["A", "B"]:
+        key = _short_label(u, ab)
+        if key in present_keys:
+            order_axis.append(key)
+
+# Fallback por si el filtro deja algo atípico
+if not order_axis:
+    order_axis = sorted(g["UsuarioTurnoShort"].unique().tolist())
+
+
 if chart_is_h:
     # --- BARRA HORIZONTAL ---
     height = max(320, 24*len(order_axis) + 110)
