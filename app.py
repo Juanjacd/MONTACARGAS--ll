@@ -892,6 +892,7 @@ apply_plot_theme(fig)
 st.plotly_chart(fig, use_container_width=True)
 
 
+
 # =========================================================
 # [S10] Vista 2 — Órdenes OT por usuario/turno
 # =========================================================
