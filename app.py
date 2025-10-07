@@ -923,15 +923,7 @@ def view_tm_por_usuario_turno():
     st.plotly_chart(fig, use_container_width=True)
 
 
-else:
-    # --- BARRA VERTICAL ---
-    height = max(420, 24*len(order_axis) + 60)
-    fig = px.bar(
-        g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
-        category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-        color_discrete_map=EXT_COLOR_MAP,
-        custom_data=["ItemExt","Min"], height=height
-    )
+
     fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
     tick_angle = -65 if len(order_axis) > 8 else -30
     fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
