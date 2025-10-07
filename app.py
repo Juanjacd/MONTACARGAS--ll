@@ -820,9 +820,7 @@ def view_tm_por_usuario_turno():
 
     g = g.rename(columns={"AdjMin":"Min"})
     hover_tmpl_h = "Ítem: %{customdata[0]}<br>Minutos TM: %{customdata[1]:.0f}m<extra></extra>"
-
     chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
-chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
 
 # --- Asegurar columnas y orden del eje antes de graficar ---
 # Si aún no existe UsuarioTurnoShort, constrúyelo desde g
