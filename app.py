@@ -1103,8 +1103,8 @@ def view_ordenes_ot():
     )
 
     # ✅ REUBICADO: aplicar tema y renderizar DENTRO de la función
-    apply_plot_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    #apply_plot_theme(fig)
+    #st.plotly_chart(fig, use_container_width=True)
 
 # =========================================================
 # [S10] Vista 2 — Órdenes OT por usuario/turno  (LIMPIO)
