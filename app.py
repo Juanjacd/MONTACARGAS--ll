@@ -744,10 +744,12 @@ def render_kpis(df_filtered: pd.DataFrame):
 # =========================================================
 def view_tm_por_usuario_turno():
     render_section_title("Tiempo Muerto — dos barras por Usuario (Turno A y B), apilado por ítem")
+
     dtmp = df_f.copy()
-        # --- BLINDAJE: garantizar ItemExt y listas de ítems ---
+
+    # --- BLINDAJE: garantizar ItemExt ---
     if "ItemExt" not in dtmp.columns:
-        # Clasificación mínima: primero por texto, si no, por origen/destino, si no, '—'
+        # Clasificación mínima: primero por texto; si no, por origen/destino; si no, '—'
         dtmp["ItemExt"] = dtmp.apply(
             lambda r: (canon_item_from_text(r.get("ItemRaw"))
                        or item_ext(r.get("Ubic.proced"), r.get("Ubicación de destino"))
@@ -756,31 +758,41 @@ def view_tm_por_usuario_turno():
         )
 
     avail_items = sorted([x for x in dtmp["ItemExt"].dropna().unique().tolist()])
-    # Si en algún momento decides poner un selector en sidebar, podrías guardar en session_state['sel_items'].
     sel_items = st.session_state.get("sel_items", [])
 
-    df_g = dtmp.sort_values(["Usuario","DatetimeOper"]).copy()
+    # --- Calcular gaps (TM) entre movimientos, descontando almuerzo/combustible ---
+    df_g = dtmp.sort_values(["Usuario", "DatetimeOper"]).copy()
     df_g["prev_dt"] = df_g.groupby("Usuario")["DatetimeOper"].shift(1)
     df_g["prev_fecha"] = df_g.groupby("Usuario")["FechaOper"].shift(1)
     df_g["prev_turno"] = df_g.groupby("Usuario")["Turno"].shift(1)
-    same = df_g["prev_dt"].notna() & (df_g["FechaOper"]==df_g["prev_fecha"]) & (df_g["Turno"]==df_g["prev_turno"])
+    same = (
+        df_g["prev_dt"].notna() &
+        (df_g["FechaOper"] == df_g["prev_fecha"]) &
+        (df_g["Turno"] == df_g["prev_turno"])
+    )
     df_g = df_g[same].copy()
 
-    EXC = [TURNOS["Turno A"]["lunch"], TURNOS["Turno A"]["fuel"],
-           TURNOS["Turno B"]["lunch"], TURNOS["Turno B"]["fuel"]]
+    EXC = [
+        TURNOS["Turno A"]["lunch"], TURNOS["Turno A"]["fuel"],
+        TURNOS["Turno B"]["lunch"], TURNOS["Turno B"]["fuel"]
+    ]
+
     rows = []
     for _, r in df_g.iterrows():
         start = r["prev_dt"]; end = r["DatetimeOper"]; date = r["FechaOper"]
-        gap = (end - start).total_seconds()/60.0
-        if gap <= 0: continue
+        gap = (end - start).total_seconds() / 60.0
+        if gap <= 0:
+            continue
 
         def subtract_window(seg_start, seg_end, win_start, win_end):
             if win_end <= seg_start or win_start >= seg_end:
                 return [(seg_start, seg_end)]
             parts = []
-            if seg_start < win_start: parts.append((seg_start, max(seg_start, win_start)))
-            if seg_end > win_end:     parts.append((min(seg_end, win_end), seg_end))
-            return [(s,e) for (s,e) in parts if e > s]
+            if seg_start < win_start:
+                parts.append((seg_start, max(seg_start, win_start)))
+            if seg_end > win_end:
+                parts.append((min(seg_end, win_end), seg_end))
+            return [(s, e) for (s, e) in parts if e > s]
 
         def subtract_windows(seg_start, seg_end, date, windows):
             segs = [(seg_start, seg_end)]
@@ -791,92 +803,125 @@ def view_tm_por_usuario_turno():
                 for s, e in segs:
                     new.extend(subtract_window(s, e, st_w, en_w))
                 segs = new
-                if not segs: break
+                if not segs:
+                    break
             return segs
 
         segs = subtract_windows(start, end, date, EXC)
-        if not segs: continue
-        adj = sum((e - s).total_seconds()/60.0 for s, e in segs)
+        if not segs:
+            continue
+        adj = sum((e - s).total_seconds() / 60.0 for s, e in segs)
         if adj > THRESH_MIN:
-            rows.append({"Usuario": r["Usuario"], "Turno": r["Turno"], "ItemExt": r["ItemExt"], "AdjMin": adj})
+            rows.append({
+                "Usuario": r["Usuario"],
+                "Turno": r["Turno"],
+                "ItemExt": r["ItemExt"],
+                "AdjMin": adj
+            })
 
     dead_ext = pd.DataFrame(rows)
     if dead_ext.empty:
-        st.info("No se detectó TM > 15 min con el filtro actual."); return
+        st.info("No se detectó TM > 15 min con el filtro actual.")
+        return
 
-    tm_ut = dead_ext.groupby(["Usuario","Turno","ItemExt"])["AdjMin"].sum().reset_index()
-    tm_ut = tm_ut[tm_ut["ItemExt"].isin(sel_items)] if sel_items else tm_ut
+    tm_ut = (
+        dead_ext.groupby(["Usuario", "Turno", "ItemExt"])["AdjMin"]
+        .sum()
+        .reset_index()
+    )
+    if sel_items:
+        tm_ut = tm_ut[tm_ut["ItemExt"].isin(sel_items)]
 
+    # --- Eje y orden ---
     g = tm_ut.copy()
-    g["TurnoAB"] = g["Turno"].str.replace("Turno ","", regex=False)
-    g["UsuarioTurnoShort"] = g.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
-
-    order_users = (g.groupby("Usuario")["AdjMin"].sum().sort_values(ascending=False).index.tolist())
-    order_axis, present_keys = [], set(g["UsuarioTurnoShort"])
-    for u in order_users:
-        for ab in ["A","B"]:
-            key = _short_label(u, ab)
-            if key in present_keys: order_axis.append(key)
-
-    g = g.rename(columns={"AdjMin":"Min"})
-    hover_tmpl_h = "Ítem: %{customdata[0]}<br>Minutos TM: %{customdata[1]:.0f}m<extra></extra>"
-    chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
-
-# --- Asegurar columnas y orden del eje antes de graficar ---
-# Si aún no existe UsuarioTurnoShort, constrúyelo desde g
-if "UsuarioTurnoShort" not in g.columns:
     g["TurnoAB"] = g["Turno"].str.replace("Turno ", "", regex=False)
     g["UsuarioTurnoShort"] = g.apply(lambda r: _short_label(r["Usuario"], r["TurnoAB"]), axis=1)
 
-# Ordenar usuarios por total de minutos (desc) y construir el eje intercalando A/B
-order_users = (
-    g.groupby("Usuario")["Min"]
-     .sum()
-     .sort_values(ascending=False)
-     .index.tolist()
-)
-
-order_axis, present_keys = [], set(g["UsuarioTurnoShort"])
-for u in order_users:
-    for ab in ["A", "B"]:
-        key = _short_label(u, ab)
-        if key in present_keys:
-            order_axis.append(key)
-
-# Fallback por si el filtro deja algo atípico
-if not order_axis:
-    order_axis = sorted(g["UsuarioTurnoShort"].unique().tolist())
-
-
-if chart_is_h:
-    # --- BARRA HORIZONTAL ---
-    height = max(320, 24*len(order_axis) + 110)
-    fig = px.bar(
-        g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
-        barmode="stack",
-        category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
-        color_discrete_map=EXT_COLOR_MAP,
-        custom_data=["ItemExt","Min"], height=height
+    order_users = (
+        g.groupby("Usuario")["AdjMin"]
+         .sum()
+         .sort_values(ascending=False)
+         .index.tolist()
     )
-    fig.update_traces(hovertemplate=hover_tmpl_h, marker_line_width=0, opacity=0.95, cliponaxis=False)
-    fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=12))
+    present_keys = set(g["UsuarioTurnoShort"])
+    order_axis = []
+    for u in order_users:
+        for ab in ["A", "B"]:
+            k = _short_label(u, ab)
+            if k in present_keys:
+                order_axis.append(k)
+    if not order_axis:
+        order_axis = sorted(g["UsuarioTurnoShort"].unique().tolist())
 
-    totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
-    fig.add_trace(go.Scatter(
-        x=totals.values, y=totals.index.tolist(), mode="text",
-        text=[f"{v:.0f} min" for v in totals.values],
-        textposition="middle right", textfont=dict(size=12, color=ANN_COL),
-        showlegend=False, hoverinfo="skip"
-    ))
-    xmax = max(1, float(totals.max()))
-    fig.update_xaxes(range=[0, xmax*1.06], tickfont=dict(size=12))
+    g = g.rename(columns={"AdjMin": "Min"})
+    hover_tmpl = "Ítem: %{customdata[0]}<br>Minutos TM: %{customdata[1]:.0f}m<extra></extra>"
+    chart_is_h = (st.session_state.get("chart_type", "Barra horizontal") == "Barra horizontal")
 
-    _responsive_bar_style(fig, len(order_axis))
-    fig.update_layout(
-        margin=dict(t=10, b=60, l=10, r=10),
-        legend_title_text="Ítem",
-        legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
-    )
+    # --- Gráficas ---
+    if chart_is_h:
+        # Barra horizontal
+        height = max(320, 24 * len(order_axis) + 110)
+        fig = px.bar(
+            g, x="Min", y="UsuarioTurnoShort", color="ItemExt", orientation="h",
+            barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt", "Min"], height=height
+        )
+        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, cliponaxis=False)
+        fig.update_yaxes(categoryorder="array", categoryarray=order_axis, tickfont=dict(size=12))
+
+        totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
+        fig.add_trace(go.Scatter(
+            x=totals.values, y=totals.index.tolist(), mode="text",
+            text=[f"{v:.0f} min" for v in totals.values],
+            textposition="middle right", textfont=dict(size=12, color=ANN_COL),
+            showlegend=False, hoverinfo="skip"
+        ))
+        xmax = max(1, float(totals.max()))
+        fig.update_xaxes(range=[0, xmax * 1.06], tickfont=dict(size=12))
+
+        _responsive_bar_style(fig, len(order_axis))
+        fig.update_layout(
+            margin=dict(t=10, b=60, l=10, r=10),
+            legend_title_text="Ítem",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+        )
+
+    else:
+        # Barra vertical
+        height = max(420, 24 * len(order_axis) + 60)
+        fig = px.bar(
+            g, x="UsuarioTurnoShort", y="Min", color="ItemExt", barmode="stack",
+            category_orders={"UsuarioTurnoShort": order_axis, "ItemExt": (sel_items if sel_items else avail_items)},
+            color_discrete_map=EXT_COLOR_MAP,
+            custom_data=["ItemExt", "Min"], height=height
+        )
+        fig.update_traces(hovertemplate=hover_tmpl, marker_line_width=0, opacity=0.95, cliponaxis=False)
+        tick_angle = -65 if len(order_axis) > 8 else -30
+        fig.update_xaxes(categoryorder="array", categoryarray=order_axis, tickangle=tick_angle, tickfont=dict(size=10))
+
+        totals = (g.groupby("UsuarioTurnoShort")["Min"].sum().reindex(order_axis))
+        ymax = float(totals.max()) * 1.18
+        fig.update_yaxes(range=[0, ymax])
+
+        fig.add_trace(go.Bar(
+            x=totals.index.tolist(), y=totals.values,
+            marker_color='rgba(0,0,0,0)', showlegend=False, hoverinfo="skip",
+            text=[f"{v:.0f}" for v in totals.values],
+            textposition="outside", textfont=dict(size=10, color=ANN_COL), cliponaxis=False
+        ))
+
+        _responsive_bar_style(fig, len(order_axis))
+        fig.update_layout(
+            margin=dict(t=10, b=60, l=10, r=10),
+            legend_title_text="Ítem",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5)
+        )
+
+    apply_plot_theme(fig)
+    st.plotly_chart(fig, use_container_width=True)
+
 
 else:
     # --- BARRA VERTICAL ---
